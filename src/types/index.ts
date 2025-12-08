@@ -27,6 +27,7 @@ export interface Card {
     rarity?: string;
     set_name?: string;
     set?: string;
+    produced_mana?: string[]; // Mana colors this card can produce (for mana rock detection)
 }
 
 // Card instance in the game (can be tapped, etc.)

@@ -30,11 +30,11 @@ export default function CardInspectModal() {
         <AnimatePresence>
             {inspectCard && (
                 <motion.div
-                    className="fixed inset-0 flex items-center justify-center p-4"
+                    className="fixed inset-0 flex items-center justify-center p-4 modal-overlay-premium"
                     style={{ zIndex: 9999 }}
-                    initial={{ backgroundColor: 'rgba(0, 0, 0, 0)' }}
-                    animate={{ backgroundColor: 'rgba(0, 0, 0, 0.85)' }}
-                    exit={{ backgroundColor: 'rgba(0, 0, 0, 0)' }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
                     transition={{ duration: 0.2 }}
                     onClick={() => setInspectCard(null)}
                 >

@@ -48,15 +48,20 @@ export default function GameLog() {
                 }`}
             whileDrag={{ scale: 1.02 }}
         >
-            {/* Header */}
+            {/* Header - Premium */}
             <div
-                className="flex items-center justify-between px-3 py-2 bg-gray-900/95 border border-gray-700 rounded-t-lg hover:bg-gray-800/95"
+                className="flex items-center justify-between px-3 py-2 gamelog-header rounded-t-lg"
+                style={{
+                    background: 'linear-gradient(135deg, rgba(20, 20, 30, 0.95) 0%, rgba(15, 15, 22, 0.98) 100%)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    borderBottom: 'none'
+                }}
             >
                 {/* Drag Handle */}
                 <GripVertical className="w-4 h-4 text-gray-600 cursor-grab" />
 
                 <span
-                    className="text-sm font-medium text-gray-300 font-mono flex-1 text-center cursor-pointer"
+                    className="text-sm font-medium font-mono flex-1 text-center cursor-pointer bg-gradient-to-r from-amber-400 to-yellow-300 bg-clip-text text-transparent"
                     onClick={() => setIsCollapsed(!isCollapsed)}
                 >
                     📜 Game Log
@@ -68,7 +73,7 @@ export default function GameLog() {
                                 e.stopPropagation();
                                 clearGameLog();
                             }}
-                            className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-red-400"
+                            className="p-1 hover:bg-red-500/10 rounded text-gray-400 hover:text-red-400 transition-colors"
                             title="Clear log"
                         >
                             <Trash2 className="w-3 h-3" />
@@ -76,7 +81,7 @@ export default function GameLog() {
                     )}
                     <button
                         onClick={() => setIsCollapsed(!isCollapsed)}
-                        className="p-1 hover:bg-gray-700 rounded"
+                        className="p-1 hover:bg-amber-500/10 rounded transition-colors"
                     >
                         {isCollapsed ? (
                             <ChevronUp className="w-4 h-4 text-gray-400" />
@@ -87,9 +92,17 @@ export default function GameLog() {
                 </div>
             </div>
 
-            {/* Log Content */}
+            {/* Log Content - Premium */}
             {!isCollapsed && (
-                <div className="bg-gray-950/95 border border-t-0 border-gray-700 rounded-b-lg max-h-48 overflow-y-auto font-mono text-xs">
+                <div
+                    className="max-h-48 overflow-y-auto font-mono text-xs rounded-b-lg"
+                    style={{
+                        background: 'linear-gradient(180deg, rgba(10, 10, 15, 0.95) 0%, rgba(8, 8, 12, 0.98) 100%)',
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        borderTop: 'none',
+                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
+                    }}
+                >
                     {gameLog.length === 0 ? (
                         <div className="px-3 py-4 text-gray-500 text-center italic">
                             No actions yet...

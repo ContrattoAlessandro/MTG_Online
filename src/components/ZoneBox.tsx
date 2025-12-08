@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useGameStore } from '../store/gameStore';
 import { useSoundEngine } from '../hooks/useSoundEngine';
 import { getCardImageUrl, getCardBackUrl } from '../api/scryfall';
@@ -14,7 +15,7 @@ interface ZoneBoxProps {
     borderColor: string;
 }
 
-export default function ZoneBox({ zone, label, icon, borderColor }: ZoneBoxProps) {
+export default function ZoneBox({ zone, label, icon }: ZoneBoxProps) {
     const cards = useGameStore((s) => s.cards);
     const isTopCardRevealed = useGameStore((s) => s.isTopCardRevealed);
     const zoneCards = cards.filter((c) => c.zone === zone);
@@ -25,26 +26,8 @@ export default function ZoneBox({ zone, label, icon, borderColor }: ZoneBoxProps
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const menuContainerRef = useRef<HTMLDivElement>(null);
 
-    // Close library menu when clicking outside
-    useEffect(() => {
-        if (!isMenuOpen) return;
-
-        const handleClickOutside = (event: MouseEvent) => {
-            if (menuContainerRef.current && !menuContainerRef.current.contains(event.target as Node)) {
-                setIsMenuOpen(false);
-            }
-        };
-
-        // Small delay to prevent immediate close on the same click
-        const timeoutId = setTimeout(() => {
-            document.addEventListener('mousedown', handleClickOutside);
-        }, 10);
-
-        return () => {
-            clearTimeout(timeoutId);
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, [isMenuOpen]);
+    // Note: Click-outside handling for LibraryMenu is done inside LibraryMenu 
+    // component itself since it's portaled to document.body
 
     // Show card image based on zone and reveal state
     const getPreviewImage = () => {
@@ -93,39 +76,52 @@ export default function ZoneBox({ zone, label, icon, borderColor }: ZoneBoxProps
 
     return (
         <>
-            <div ref={menuContainerRef} className={`relative bg-gray-800/50 rounded-xl p-2 border-2 ${borderColor}`}>
+            <div ref={menuContainerRef} className="relative zone-container group">
                 {/* Header */}
-                <div className="flex items-center gap-2 mb-2">
-                    {icon}
-                    <span className="text-xs font-medium text-gray-300">{label}</span>
+                <div className="flex items-center gap-2 mb-3">
+                    <div className="drop-shadow-[0_0_6px_currentColor] flex-shrink-0">
+                        {icon}
+                    </div>
+                    <span className="text-sm font-medium text-gray-300 truncate">{label}</span>
                     {zone !== 'commandZone' && (
-                        <span className="ml-auto text-xs font-bold text-blue-400">{count}</span>
+                        <span className="ml-auto text-sm font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent flex-shrink-0">
+                            {count}
+                        </span>
                     )}
                 </div>
 
-                {/* Preview */}
+                {/* Preview - Premium */}
                 <button
                     onClick={handleClick}
                     onDoubleClick={handleDoubleClick}
                     onContextMenu={handleContextMenu}
-                    className="w-full aspect-[63/88] rounded-lg overflow-hidden bg-gray-900 hover:ring-2 hover:ring-blue-500 transition-all relative"
+                    className="w-full aspect-[63/88] rounded-lg overflow-hidden bg-gray-900/50 transition-all relative group-hover:ring-2 group-hover:ring-amber-500/30"
+                    style={{
+                        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05)'
+                    }}
                 >
                     {getPreviewImage() ? (
-                        <img
-                            src={getPreviewImage()!}
-                            alt={label}
-                            className="w-full h-full object-cover"
-                            draggable={false}
-                        />
+                        <>
+                            <img
+                                src={getPreviewImage()!}
+                                alt={label}
+                                className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                                draggable={false}
+                            />
+                            {/* Shine effect on hover */}
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 -translate-x-full group-hover:translate-x-full transition-all duration-700 pointer-events-none" />
+                        </>
                     ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-600 text-2xl">
-                            {icon}
+                            <div className="drop-shadow-[0_0_8px_currentColor] opacity-50">
+                                {icon}
+                            </div>
                         </div>
                     )}
 
                     {/* Revealed indicator for library */}
                     {zone === 'library' && isTopCardRevealed && topCard && (
-                        <div className="absolute top-1 right-1 bg-cyan-500 rounded-full p-0.5">
+                        <div className="absolute top-1 right-1 bg-cyan-500 rounded-full p-0.5 shadow-lg shadow-cyan-500/30">
                             <Eye className="w-3 h-3 text-white" />
                         </div>
                     )}
@@ -136,26 +132,29 @@ export default function ZoneBox({ zone, label, icon, borderColor }: ZoneBoxProps
                     <LibraryStats cards={zoneCards} />
                 )}
 
-                {/* Library Menu */}
-                {zone === 'library' && isMenuOpen && (
-                    <LibraryMenu onClose={() => setIsMenuOpen(false)} />
+                {/* Library Menu - Portal to body to avoid sidebar clipping */}
+                {zone === 'library' && isMenuOpen && createPortal(
+                    <LibraryMenu onClose={() => setIsMenuOpen(false)} />,
+                    document.body
                 )}
             </div>
 
-            {/* Zone Modal - for Graveyard/Exile only */}
-            {isModalOpen && zone !== 'library' && zone !== 'commandZone' && (
-                <ZoneModal zone={zone} label={label} cards={zoneCards} onClose={() => setIsModalOpen(false)} />
+            {/* Zone Modal - for Graveyard/Exile only - Portal to body to avoid sidebar clipping */}
+            {isModalOpen && zone !== 'library' && zone !== 'commandZone' && createPortal(
+                <ZoneModal zone={zone} label={label} cards={zoneCards} onClose={() => setIsModalOpen(false)} />,
+                document.body
             )}
 
-            {/* Context Menu for Commander */}
-            {contextMenu && (
+            {/* Context Menu for Commander - Portal to body to avoid sidebar clipping */}
+            {contextMenu && createPortal(
                 <ContextMenu
                     x={contextMenu.x}
                     y={contextMenu.y}
                     cardId={contextMenu.cardId}
                     currentZone={zone}
                     onClose={() => setContextMenu(null)}
-                />
+                />,
+                document.body
             )}
         </>
     );
@@ -174,6 +173,26 @@ function LibraryMenu({ onClose }: { onClose: () => void }) {
     const [drawAmount, setDrawAmount] = useState('1');
     const [millAmount, setMillAmount] = useState('1');
     const { play } = useSoundEngine();
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    // Click-outside handler for closing the menu
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                onClose();
+            }
+        };
+
+        // Small delay to prevent immediate close on the same click that opened the menu
+        const timeoutId = setTimeout(() => {
+            document.addEventListener('mousedown', handleClickOutside);
+        }, 10);
+
+        return () => {
+            clearTimeout(timeoutId);
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [onClose]);
 
     if (isStatsOpen) {
         return <DeckStatsModal isOpen={true} onClose={() => { setIsStatsOpen(false); onClose(); }} />;
@@ -206,14 +225,14 @@ function LibraryMenu({ onClose }: { onClose: () => void }) {
     };
 
     return (
-        <div className="fixed left-32 top-20 bg-gray-800 border border-gray-600 rounded-lg shadow-2xl py-1 z-[200] min-w-[200px]">
-            <button onClick={() => setIsSearchOpen(true)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2 text-blue-400">
-                <Search className="w-4 h-4" /> Search Library
+        <div ref={menuRef} className="fixed left-44 top-20 dropdown-premium py-2 z-[200] min-w-[220px]">
+            <button onClick={() => setIsSearchOpen(true)} className="w-full px-3 py-2 text-left text-sm hover:bg-blue-500/10 flex items-center gap-2 text-blue-400 transition-colors">
+                <Search className="w-4 h-4 drop-shadow-[0_0_4px_currentColor]" /> Search Library
             </button>
-            <button onClick={() => setIsStatsOpen(true)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2 text-purple-400">
-                <BarChart3 className="w-4 h-4" /> Deck Stats
+            <button onClick={() => setIsStatsOpen(true)} className="w-full px-3 py-2 text-left text-sm hover:bg-purple-500/10 flex items-center gap-2 text-purple-400 transition-colors">
+                <BarChart3 className="w-4 h-4 drop-shadow-[0_0_4px_currentColor]" /> Deck Stats
             </button>
-            <div className="h-px bg-gray-600 my-1" />
+            <div className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent my-1" />
 
             {/* View Top X / Scry */}
             <div className="px-3 py-2">
@@ -238,43 +257,47 @@ function LibraryMenu({ onClose }: { onClose: () => void }) {
                     Scry / View Top Cards
                 </button>
             </div>
-            <div className="h-px bg-gray-600 my-1" />
+            <div className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent my-1" />
 
             {/* Reveal/Hide Top Card */}
             <button
                 onClick={() => { toggleTopCardRevealed(); }}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2 text-cyan-400"
+                className="w-full px-3 py-2 text-left text-sm hover:bg-cyan-500/10 flex items-center gap-2 text-cyan-400 transition-colors"
                 disabled={libraryCount === 0}
             >
-                {isTopCardRevealed ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {isTopCardRevealed ? <EyeOff className="w-4 h-4 drop-shadow-[0_0_4px_currentColor]" /> : <Eye className="w-4 h-4 drop-shadow-[0_0_4px_currentColor]" />}
                 {isTopCardRevealed ? 'Hide Top Card' : 'Reveal Top Card'}
             </button>
 
             {/* Put Top Card to Bottom */}
             <button
                 onClick={() => { putTopCardToBottom(); onClose(); }}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2 text-amber-400"
+                className="w-full px-3 py-2 text-left text-sm hover:bg-amber-500/10 flex items-center gap-2 text-amber-400 transition-colors"
                 disabled={libraryCount < 2}
             >
-                <ArrowDownToLine className="w-4 h-4" /> Put Bottom
+                <ArrowDownToLine className="w-4 h-4 drop-shadow-[0_0_4px_currentColor]" /> Put Bottom
             </button>
 
-            <div className="h-px bg-gray-600 my-1" />
+            <div className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent my-1" />
 
             {/* Draw X */}
             <div className="px-3 py-2 flex items-center gap-2">
-                <ArrowDown className="w-4 h-4 text-green-400" />
+                <ArrowDown className="w-4 h-4 text-green-400 drop-shadow-[0_0_4px_rgba(34,197,94,0.5)]" />
                 <input
                     type="number"
                     min="1"
                     value={drawAmount}
                     onChange={(e) => setDrawAmount(e.target.value)}
-                    className="w-12 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-center"
+                    className="w-12 px-2 py-1 bg-gray-800/80 border border-gray-600 rounded text-sm text-center focus:border-green-500/50"
                     onClick={(e) => e.stopPropagation()}
                 />
                 <button
                     onClick={handleDraw}
-                    className="flex-1 px-2 py-1 bg-green-600 hover:bg-green-500 rounded text-sm"
+                    className="flex-1 px-2 py-1.5 rounded text-sm font-medium transition-all"
+                    style={{
+                        background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.8), rgba(22, 163, 74, 0.9))',
+                        boxShadow: '0 0 10px rgba(34, 197, 94, 0.2)'
+                    }}
                     disabled={libraryCount === 0}
                 >
                     Draw
@@ -283,27 +306,31 @@ function LibraryMenu({ onClose }: { onClose: () => void }) {
 
             {/* Mill X */}
             <div className="px-3 py-2 flex items-center gap-2">
-                <Trash2 className="w-4 h-4 text-red-400" />
+                <Trash2 className="w-4 h-4 text-red-400 drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]" />
                 <input
                     type="number"
                     min="1"
                     value={millAmount}
                     onChange={(e) => setMillAmount(e.target.value)}
-                    className="w-12 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-center"
+                    className="w-12 px-2 py-1 bg-gray-800/80 border border-gray-600 rounded text-sm text-center focus:border-red-500/50"
                     onClick={(e) => e.stopPropagation()}
                 />
                 <button
                     onClick={handleMill}
-                    className="flex-1 px-2 py-1 bg-red-600 hover:bg-red-500 rounded text-sm"
+                    className="flex-1 px-2 py-1.5 rounded text-sm font-medium transition-all"
+                    style={{
+                        background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.8), rgba(220, 38, 38, 0.9))',
+                        boxShadow: '0 0 10px rgba(239, 68, 68, 0.2)'
+                    }}
                     disabled={libraryCount === 0}
                 >
                     Mill
                 </button>
             </div>
 
-            <div className="h-px bg-gray-600 my-1" />
-            <button onClick={() => { shuffleLibrary(); play('shuffle'); onClose(); }} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2">
-                <Shuffle className="w-4 h-4" /> Shuffle
+            <div className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent my-1" />
+            <button onClick={() => { shuffleLibrary(); play('shuffle'); onClose(); }} className="w-full px-3 py-2 text-left text-sm hover:bg-amber-500/10 flex items-center gap-2 text-gray-300 transition-colors">
+                <Shuffle className="w-4 h-4 text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.5)]" /> Shuffle
             </button>
         </div>
     );
@@ -340,11 +367,26 @@ function ZoneModal({ zone, label, cards, onClose }: { zone: Zone; label: string;
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cardId: string } | null>(null);
 
     return (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100]" onClick={onClose}>
-            <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-4xl max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 modal-overlay-premium flex items-center justify-center z-[100]" onClick={onClose}>
+            <div
+                className="rounded-xl p-6 max-w-4xl max-h-[80vh] overflow-auto"
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                    background: 'linear-gradient(135deg, rgba(20, 20, 30, 0.98) 0%, rgba(12, 12, 18, 0.99) 100%)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    boxShadow: '0 25px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(251, 191, 36, 0.1)'
+                }}
+            >
                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold">{label} ({cards.length})</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-700 rounded-lg">✕</button>
+                    <h2 className="text-xl font-bold bg-gradient-to-r from-amber-400 to-yellow-300 bg-clip-text text-transparent">
+                        {label} ({cards.length})
+                    </h2>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onClose(); }}
+                        className="p-2 hover:bg-amber-500/10 rounded-lg transition-colors text-gray-400 hover:text-white cursor-pointer"
+                    >
+                        ✕
+                    </button>
                 </div>
 
                 {cards.length === 0 ? (
@@ -361,22 +403,23 @@ function ZoneModal({ zone, label, cards, onClose }: { zone: Zone; label: string;
                                 <img
                                     src={getCardImageUrl(card.card, 'small')}
                                     alt={card.card.name}
-                                    className="w-full rounded-lg shadow-lg hover:ring-2 hover:ring-blue-500"
+                                    className="w-full rounded-lg shadow-lg transition-all group-hover:ring-2 group-hover:ring-amber-500/50 group-hover:scale-105"
                                 />
-                                <div className="mt-1 text-xs text-gray-400 truncate text-center">{card.card.name}</div>
+                                <div className="mt-1 text-xs text-gray-400 truncate text-center group-hover:text-amber-300 transition-colors">{card.card.name}</div>
                             </div>
                         ))}
                     </div>
                 )}
 
-                {contextMenu && (
+                {contextMenu && createPortal(
                     <ContextMenu
                         x={contextMenu.x}
                         y={contextMenu.y}
                         cardId={contextMenu.cardId}
                         currentZone={zone}
                         onClose={() => setContextMenu(null)}
-                    />
+                    />,
+                    document.body
                 )}
             </div>
         </div>
@@ -451,17 +494,30 @@ function ScryModal({ count, onClose }: { count: number; onClose: () => void }) {
         cardData.card.image_uris?.normal || cardData.card.card_faces?.[0]?.image_uris?.normal;
 
     return (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[300]" onClick={onClose}>
-            <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-5xl max-h-[85vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 modal-overlay-premium flex items-center justify-center z-[300]" onClick={onClose}>
+            <div
+                className="rounded-xl p-6 max-w-5xl max-h-[85vh] overflow-auto"
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                    background: 'linear-gradient(135deg, rgba(20, 20, 30, 0.98) 0%, rgba(12, 12, 18, 0.99) 100%)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    boxShadow: '0 25px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(251, 191, 36, 0.1)'
+                }}
+            >
                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-white">Scry {count}</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-white">✕</button>
+                    <h2 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">Scry {count}</h2>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onClose(); }}
+                        className="p-2 hover:bg-amber-500/10 rounded-lg transition-colors text-gray-400 hover:text-white cursor-pointer"
+                    >
+                        ✕
+                    </button>
                 </div>
 
                 {/* Cards on Top */}
                 <div className="mb-6">
                     <h3 className="text-sm font-medium text-gray-400 mb-3">Put on Top (in draw order)</h3>
-                    <div className="flex flex-wrap gap-4 justify-center min-h-[200px] bg-gray-800/50 rounded-lg p-4">
+                    <div className="flex flex-wrap gap-4 justify-center min-h-[200px] rounded-lg p-4" style={{ background: 'rgba(0, 0, 0, 0.3)' }}>
                         {remainingTop.length === 0 ? (
                             <div className="flex items-center justify-center text-gray-500 italic">All cards assigned to other zones</div>
                         ) : (
@@ -517,17 +573,17 @@ function ScryModal({ count, onClose }: { count: number; onClose: () => void }) {
 
 // Pre-configured zone boxes
 export function CommandZoneBox() {
-    return <ZoneBox zone="commandZone" label="Commander" icon={<Crown className="w-4 h-4 text-yellow-400" />} borderColor="border-yellow-600/50" />;
+    return <ZoneBox zone="commandZone" label="Commander" icon={<Crown className="w-5 h-5 text-yellow-400" />} borderColor="border-yellow-600/50" />;
 }
 
 export function LibraryBox() {
-    return <ZoneBox zone="library" label="Library" icon={<BookOpen className="w-4 h-4 text-blue-400" />} borderColor="border-blue-600/50" />;
+    return <ZoneBox zone="library" label="Library" icon={<BookOpen className="w-5 h-5 text-blue-400" />} borderColor="border-blue-600/50" />;
 }
 
 export function GraveyardBox() {
-    return <ZoneBox zone="graveyard" label="Graveyard" icon={<Skull className="w-4 h-4 text-gray-400" />} borderColor="border-gray-600/50" />;
+    return <ZoneBox zone="graveyard" label="Graveyard" icon={<Skull className="w-5 h-5 text-gray-400" />} borderColor="border-gray-600/50" />;
 }
 
 export function ExileBox() {
-    return <ZoneBox zone="exile" label="Exile" icon={<Ban className="w-4 h-4 text-purple-400" />} borderColor="border-purple-600/50" />;
+    return <ZoneBox zone="exile" label="Exile" icon={<Ban className="w-5 h-5 text-purple-400" />} borderColor="border-purple-600/50" />;
 }

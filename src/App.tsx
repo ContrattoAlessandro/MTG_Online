@@ -29,13 +29,32 @@ export default function App() {
         return <DeckImportModal />;
     }
 
-    // Loading state
+    // Loading state - Premium
     if (isLoading) {
         return (
-            <div className="h-screen w-screen bg-gray-950 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                    <div className="text-xl text-gray-300">Loading...</div>
+            <div className="h-screen w-screen flex items-center justify-center" style={{
+                background: 'radial-gradient(ellipse at center, #12121a 0%, #0a0a0f 100%)'
+            }}>
+                {/* Floating particles */}
+                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                    {[...Array(15)].map((_, i) => (
+                        <div
+                            key={i}
+                            className="absolute w-1 h-1 rounded-full bg-amber-400/30"
+                            style={{
+                                left: `${Math.random() * 100}%`,
+                                top: `${Math.random() * 100}%`,
+                                animation: `floatParticle ${3 + Math.random() * 2}s ease-in-out infinite`,
+                                animationDelay: `${Math.random() * 2}s`
+                            }}
+                        />
+                    ))}
+                </div>
+                <div className="text-center relative z-10">
+                    <div className="w-16 h-16 loading-spinner-premium mx-auto mb-4" />
+                    <div className="text-xl bg-gradient-to-r from-amber-400 to-yellow-300 bg-clip-text text-transparent font-medium">
+                        Loading...
+                    </div>
                 </div>
             </div>
         );
@@ -43,7 +62,9 @@ export default function App() {
 
     return (
         <LayoutGroup>
-            <div className="h-screen w-screen bg-gray-950 flex flex-col overflow-hidden">
+            <div className="h-screen w-screen flex flex-col overflow-hidden" style={{
+                background: 'radial-gradient(ellipse at center, #12121a 0%, #0a0a0f 100%)'
+            }}>
                 {/* SVG Filters for Motion Blur Effects */}
                 <svg className="absolute w-0 h-0" aria-hidden="true">
                     <defs>
@@ -70,20 +91,20 @@ export default function App() {
                 <TopNav onOpenSettings={() => setIsSettingsModalOpen(true)} />
 
                 {/* Main Content - Left Sidebar + Battlefield */}
-                <div className="flex flex-1 overflow-hidden">
-                    {/* Left Sidebar - Zones */}
-                    <div className="w-32 bg-gray-900/50 border-r border-gray-700 p-2 flex flex-col gap-3 overflow-y-auto">
+                <div className="flex flex-1 min-h-0">
+                    {/* Left Sidebar - Zones - Premium */}
+                    <div className="w-40 sidebar-premium p-3 flex flex-col gap-4 overflow-y-auto overflow-x-visible relative z-30">
                         <CommandZoneBox />
                         <LibraryBox />
                         <GraveyardBox />
                         <ExileBox />
 
-                        {/* Create Token Button */}
+                        {/* Create Token Button - Premium */}
                         <button
                             onClick={() => setIsTokenModalOpen(true)}
-                            className="flex flex-col items-center gap-1 p-2 bg-gradient-to-br from-amber-600/20 to-amber-700/10 hover:from-amber-500/30 hover:to-amber-600/20 border border-amber-500/30 rounded-lg transition-all group"
+                            className="token-btn-premium flex flex-col items-center gap-1 p-2 group"
                         >
-                            <Sparkles className="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform" />
+                            <Sparkles className="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
                             <span className="text-xs text-amber-300 font-medium">Token</span>
                         </button>
                     </div>

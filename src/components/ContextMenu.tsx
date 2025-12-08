@@ -171,21 +171,26 @@ export default function ContextMenu({ x, y, cardId, currentZone, onClose }: Cont
     return (
         <div
             ref={menuRef}
-            className="fixed bg-gray-800 border border-gray-600 rounded-lg shadow-2xl py-1 min-w-[180px] z-[1000]"
+            className="fixed context-menu-premium py-1 min-w-[180px] z-[1000]"
             style={{ left: x, top: y }}
             onClick={(e) => e.stopPropagation()}
         >
             {card && (
-                <div className="px-3 py-2 text-sm font-medium text-amber-500 border-b border-gray-600 truncate">
-                    🃏 {card.card.name}
-                    {isCommander && <span className="ml-2 text-yellow-400">👑</span>}
+                <div className="px-3 py-2 text-sm font-medium border-b border-white/10">
+                    <div className="flex items-center gap-2">
+                        <span className="text-lg">🃏</span>
+                        <span className="bg-gradient-to-r from-amber-400 to-yellow-300 bg-clip-text text-transparent truncate">
+                            {card.card.name}
+                        </span>
+                        {isCommander && <span className="text-yellow-400 drop-shadow-[0_0_4px_rgba(250,204,21,0.5)]">👑</span>}
+                    </div>
                 </div>
             )}
 
             {/* Attachments Section */}
             {card && card.attachmentIds && card.attachmentIds.length > 0 && (
                 <>
-                    <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-900/50">
+                    <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-white/5">
                         Attachments
                     </div>
                     {card.attachmentIds.map(attId => {
@@ -198,23 +203,22 @@ export default function ContextMenu({ x, y, cardId, currentZone, onClose }: Cont
                                     e.stopPropagation();
                                     detachCard(att.id);
                                     play('cardSnap');
-                                    // Keep menu open? No, standard behavior is close
                                     onClose();
                                 }}
-                                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-700 transition-colors flex items-center justify-between text-gray-300"
+                                className="w-full px-3 py-2 text-left text-sm hover:bg-red-500/10 transition-all flex items-center justify-between text-gray-300 group"
                             >
                                 <span className="truncate max-w-[120px]">{att.card.name}</span>
-                                <Unlink className="w-3 h-3 text-red-400" />
+                                <Unlink className="w-3 h-3 text-red-400 group-hover:drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]" />
                             </button>
                         );
                     })}
-                    <div className="h-px bg-gray-600 my-1" />
+                    <div className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent my-1" />
                 </>
             )}
 
             {visibleItems.map((item, index) =>
                 item.type === 'divider' ? (
-                    <div key={index} className="h-px bg-gray-600 my-1" />
+                    <div key={index} className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent my-1" />
                 ) : (
                     <button
                         key={index}
@@ -223,9 +227,18 @@ export default function ContextMenu({ x, y, cardId, currentZone, onClose }: Cont
                             if (item.action) item.action();
                             if (!item.isAction) onClose();
                         }}
-                        className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-700 transition-colors flex items-center gap-2 ${item.color || ''}`}
+                        className={`w-full px-3 py-2 text-left text-sm transition-all flex items-center gap-2 hover:pl-4 ${item.color || ''}`}
+                        style={{
+                            background: 'transparent'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.background = `linear-gradient(90deg, rgba(251, 191, 36, 0.08) 0%, transparent 100%)`;
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'transparent';
+                        }}
                     >
-                        {item.icon}
+                        <span className="drop-shadow-[0_0_4px_currentColor]">{item.icon}</span>
                         {item.label}
                     </button>
                 )

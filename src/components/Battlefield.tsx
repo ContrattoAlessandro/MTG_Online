@@ -8,6 +8,7 @@ import ContextMenu from './ContextMenu';
 import TargetingOverlay from './TargetingOverlay';
 import { Zone } from '../types';
 import { GlowStreak } from './MotionTrail';
+import { LayoutGrid } from 'lucide-react';
 
 interface BattlefieldProps {
     onHoverCard?: (cardId: string | null) => void;
@@ -15,6 +16,7 @@ interface BattlefieldProps {
 
 export default function Battlefield({ onHoverCard }: BattlefieldProps) {
     const cards = useGameStore((s) => s.cards);
+    const cardPositions = useGameStore((s) => s.cardPositions);
     // Filter out attached cards
     const battlefieldCards = cards.filter((c) => c.zone === 'battlefield' && !c.attachedToId);
 
@@ -25,7 +27,8 @@ export default function Battlefield({ onHoverCard }: BattlefieldProps) {
         clearSummonedCard,
         targetingMode,
         completeTargeting,
-        cancelTargeting
+        cancelTargeting,
+        autoArrangeBattlefield
     } = useGameStore();
 
     const { play } = useSoundEngine();
@@ -85,6 +88,30 @@ export default function Battlefield({ onHoverCard }: BattlefieldProps) {
         setContextMenu({ x: e.clientX, y: e.clientY, cardId });
     };
 
+    const handleAutoArrange = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        autoArrangeBattlefield();
+        play('cardSnap');
+    };
+
+    // Get position for a card - either from store or default
+    const getCardPosition = (cardId: string, index: number) => {
+        const position = cardPositions[cardId];
+        if (position) {
+            return { left: position.x, top: position.y };
+        }
+        // Default flow position when not arranged
+        const cardsPerRow = 8;
+        const cardWidth = 140;
+        const cardHeight = 190;
+        const col = index % cardsPerRow;
+        const row = Math.floor(index / cardsPerRow);
+        return {
+            left: 20 + col * cardWidth,
+            top: 20 + row * cardHeight,
+        };
+    };
+
     return (
         <div
             className={`h-full p-4 overflow-auto relative pb-40 bg-cover bg-center bg-no-repeat ${targetingMode.active ? 'cursor-crosshair' : ''}`}
@@ -97,20 +124,43 @@ export default function Battlefield({ onHoverCard }: BattlefieldProps) {
         >
             <TargetingOverlay />
 
-            {/* Battlefield grid */}
-            <div className="flex flex-wrap gap-2 content-start min-h-full">
+            {/* Auto-Arrange Button */}
+            {battlefieldCards.length > 0 && (
+                <button
+                    onClick={handleAutoArrange}
+                    className="absolute top-4 right-4 z-50 flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all overflow-hidden group"
+                    style={{
+                        background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.8), rgba(124, 58, 237, 0.9))',
+                        border: '1px solid rgba(139, 92, 246, 0.5)',
+                        boxShadow: '0 0 20px rgba(139, 92, 246, 0.3)'
+                    }}
+                    title="Auto-arrange cards into organized rows (Creatures on top, Enchantments/Artifacts in middle, Lands at bottom)"
+                >
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity -translate-x-full group-hover:translate-x-full duration-500" />
+                    <LayoutGrid className="w-4 h-4 relative z-10" />
+                    <span className="hidden md:inline relative z-10">Auto-Arrange</span>
+                </button>
+            )}
+
+            {/* Battlefield - always use absolute positioning */}
+            <div className="relative min-h-[700px]">
                 {battlefieldCards.length === 0 ? (
-                    <div className="absolute inset-0 flex items-center justify-center text-gray-600 text-lg pointer-events-none">
-                        <div className="text-center">
-                            <div className="text-4xl mb-2">⚔️</div>
-                            <div>Battlefield</div>
-                            <div className="text-sm text-gray-700">Right-click cards to move them here</div>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="text-center battlefield-empty-premium">
+                            <div className="text-5xl mb-3 battlefield-empty-icon">⚔️</div>
+                            <div className="text-lg font-medium bg-gradient-to-r from-gray-500 to-gray-400 bg-clip-text text-transparent">
+                                Battlefield
+                            </div>
+                            <div className="text-sm text-gray-600 mt-1">
+                                Right-click cards to move them here
+                            </div>
                         </div>
                     </div>
                 ) : (
-                    <AnimatePresence mode="popLayout">
-                        {battlefieldCards.map((card) => {
+                    <AnimatePresence>
+                        {battlefieldCards.map((card, index) => {
                             const isSummoning = recentlySummonedCards.has(card.id);
+                            const position = getCardPosition(card.id, index);
 
                             // Resolving attachments
                             const attachments = (card.attachmentIds || [])
@@ -120,38 +170,38 @@ export default function Battlefield({ onHoverCard }: BattlefieldProps) {
                             return (
                                 <motion.div
                                     key={card.id}
-                                    layoutId={`card-${card.id}`}
                                     id={`battlefield-card-${card.id}`}
-                                    className="relative cursor-pointer"
+                                    className="absolute cursor-pointer"
                                     style={{
                                         zIndex: isSummoning ? 9999 : 1,
                                     }}
-                                    initial={{
+                                    initial={isSummoning ? {
                                         opacity: 0,
-                                        y: -80,
                                         scale: 0.3,
-                                        rotate: -5,
+                                        left: position.left,
+                                        top: position.top,
                                         filter: 'blur(8px) brightness(2)',
-                                    }}
+                                    } : false}
                                     animate={{
                                         opacity: 1,
-                                        y: 0,
                                         scale: 1,
+                                        left: position.left,
+                                        top: position.top,
                                         rotate: card.isTapped ? 90 : 0,
                                         filter: 'blur(0px) brightness(1)',
                                     }}
                                     exit={{
                                         opacity: 0,
-                                        y: -50,
                                         scale: 0.5,
                                         transition: { duration: 0.2 }
                                     }}
                                     transition={{
                                         type: 'spring',
                                         stiffness: 300,
-                                        damping: 20,
-                                        // Bounce effect for landing
-                                        bounce: 0.3,
+                                        damping: 30,
+                                        // Position changes should be smooth
+                                        left: { type: 'spring', stiffness: 300, damping: 30 },
+                                        top: { type: 'spring', stiffness: 300, damping: 30 },
                                     }}
                                     whileHover={{
                                         scale: card.isTapped ? 1 : 1.05,
@@ -178,8 +228,6 @@ export default function Battlefield({ onHoverCard }: BattlefieldProps) {
                                                 zIndex: -1 - i,
                                                 filter: 'brightness(0.9)',
                                             }}
-                                            // Handle clicking attachment specifically? 
-                                            // For now, let it bubble to parent or have same handler
                                             onClick={(e) => handleCardClick(e, att.id)}
                                             onContextMenu={(e) => handleContextMenu(e, att.id)}
                                         >
@@ -192,7 +240,7 @@ export default function Battlefield({ onHoverCard }: BattlefieldProps) {
                                     ))}
 
                                     {/* Parent Card */}
-                                    <motion.div
+                                    <div
                                         className={`
                                             w-32 h-44 rounded-lg overflow-hidden
                                             shadow-lg hover:ring-2 hover:ring-blue-500
@@ -218,7 +266,7 @@ export default function Battlefield({ onHoverCard }: BattlefieldProps) {
                                                 {card.counters}
                                             </div>
                                         )}
-                                    </motion.div>
+                                    </div>
                                 </motion.div>
                             );
                         })}

@@ -37,8 +37,8 @@ export default function Hand() {
     return (
         <>
             <div className="fixed bottom-0 left-0 right-0 h-48 z-20 pointer-events-none">
-                {/* Semi-transparent background */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
+                {/* Semi-transparent background - Premium */}
+                <div className="absolute inset-0 hand-area-premium pointer-events-none" />
 
                 {/* Cards container */}
                 <div className="relative h-full flex items-end justify-center pb-2">

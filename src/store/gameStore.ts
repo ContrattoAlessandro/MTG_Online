@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Card, CardInstance, Counters, Zone, GameState, GameLogEntry, LogActionType, GamePhase } from '../types';
 import { importDeckFromText, isLegendaryCreature, fetchRandomCards } from '../api/scryfall';
 import { DEMO_DECK, DEMO_COMMANDER } from '../data/demoDeck';
+import { calculateSmartLayout, CardPosition } from '../utils/calculateSmartLayout';
 
 // Randomizer result types
 export type RandomResult = {
@@ -148,6 +149,11 @@ interface GameStore extends GameState {
     startTargeting: (sourceCardId: string) => void;
     cancelTargeting: () => void;
     completeTargeting: (targetId: string) => void;
+
+    // Card Positions for Battlefield Layout
+    cardPositions: Record<string, CardPosition>;
+    autoArrangeBattlefield: () => void;
+    setCardPosition: (cardId: string, x: number, y: number) => void;
 }
 
 // Helper to create a snapshot for undo
@@ -191,6 +197,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // Game Log
     gameLog: [],
+
+    // Card Positions
+    cardPositions: {},
 
     setInspectCard: (card, cardId = null) => set({ inspectCard: card, inspectCardId: cardId }),
 
@@ -1007,5 +1016,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
         get().attachCard(targetingMode.sourceCardId, targetId);
         get().cancelTargeting();
+    },
+
+    // Auto-arrange battlefield cards into smart layout
+    autoArrangeBattlefield: () => {
+        const { cards } = get();
+        const newPositions = calculateSmartLayout(cards);
+        set({ cardPositions: newPositions });
+        get().addLogEntry('other', 'Auto-arranged battlefield');
+    },
+
+    // Set individual card position (for drag-and-drop)
+    setCardPosition: (cardId, x, y) => {
+        set((state) => ({
+            cardPositions: {
+                ...state.cardPositions,
+                [cardId]: { x, y },
+            },
+        }));
     },
 }));
