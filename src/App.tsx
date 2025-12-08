@@ -13,6 +13,7 @@ import TokenSearchModal from './components/TokenSearchModal';
 import SettingsModal from './components/SettingsModal';
 import MulliganModal from './components/MulliganModal';
 import GameLog from './components/GameLog';
+import { PlayerSwitcher } from './components/PlayerSwitcher';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 export default function App() {
@@ -94,7 +95,6 @@ export default function App() {
                 <div className="flex flex-1 min-h-0">
                     {/* Left Sidebar - Zones - Premium */}
                     <div className="w-40 sidebar-premium p-3 flex flex-col gap-4 overflow-y-auto overflow-x-visible relative z-30">
-                        <CommandZoneBox />
                         <LibraryBox />
                         <GraveyardBox />
                         <ExileBox />
@@ -110,18 +110,26 @@ export default function App() {
                     </div>
 
                     {/* Center - Battlefield (takes remaining space) */}
-                    <div className="flex-1 overflow-hidden">
+                    <div className="flex-1 overflow-hidden relative">
                         <Battlefield onHoverCard={setHoveredCardId} />
+
+                        {/* Command Zone - Floating Widget Top Right */}
+                        <div className="absolute right-4 top-4 w-40 z-30">
+                            <CommandZoneBox />
+                        </div>
                     </div>
                 </div>
 
                 {/* Hand - Fixed at Bottom (overlays battlefield) */}
                 <Hand onHoverCard={setHoveredCardId} />
 
-                {/* Mana Pool Widget - Fixed at Bottom Left */}
+                {/* Mana Pool Widget - Fixed at Bottom Left - NOW MOVED TO RIGHT IN MANA COMPONENT */}
                 <ManaPoolWidget />
 
-                {/* Game Log - Fixed Bottom Left */}
+                {/* Player Switcher - Multiplayer Navigation - NOW ON RIGHT */}
+                <PlayerSwitcher />
+
+                {/* Game Log - Fixed Bottom Left - NOW ON RIGHT */}
                 <GameLog />
 
                 {/* Card Inspect Modal - with shared layout animations */}

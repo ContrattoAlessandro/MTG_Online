@@ -57,6 +57,9 @@ interface GameStore extends GameState {
     isTopCardRevealed: boolean; // For "play with top card revealed" effects
     recentlySummonedCards: Set<string>; // Track cards that just entered battlefield for animation
 
+    // Multiplayer Navigation
+    switchView: (playerId: string) => void;
+
     // Mana Pool
     manaPool: ManaPool;
     adjustMana: (color: keyof ManaPool, amount: number) => void;
@@ -166,6 +169,65 @@ const createSnapshot = (state: GameStore): GameSnapshot => ({
 });
 
 export const useGameStore = create<GameStore>((set, get) => ({
+    // Multiplayer state - 4 players for Commander pod
+    players: {
+        'player-1': {
+            id: 'player-1',
+            name: 'Player 1',
+            avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=commander1&backgroundColor=1a1a2e',
+            life: 40,
+            counters: { ...initialCounters },
+            manaPool: { ...initialManaPool },
+            cards: [],
+            cardPositions: {},
+            commanderCardId: null,
+            isDead: false,
+            recentDamageTaken: 0,
+        },
+        'player-2': {
+            id: 'player-2',
+            name: 'Player 2',
+            avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=commander2&backgroundColor=2d132c',
+            life: 40,
+            counters: { ...initialCounters },
+            manaPool: { ...initialManaPool },
+            cards: [],
+            cardPositions: {},
+            commanderCardId: null,
+            isDead: false,
+            recentDamageTaken: 0,
+        },
+        'player-3': {
+            id: 'player-3',
+            name: 'Player 3',
+            avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=commander3&backgroundColor=1e3a5f',
+            life: 40,
+            counters: { ...initialCounters },
+            manaPool: { ...initialManaPool },
+            cards: [],
+            cardPositions: {},
+            commanderCardId: null,
+            isDead: false,
+            recentDamageTaken: 0,
+        },
+        'player-4': {
+            id: 'player-4',
+            name: 'Player 4',
+            avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=commander4&backgroundColor=0d3b0d',
+            life: 40,
+            counters: { ...initialCounters },
+            manaPool: { ...initialManaPool },
+            cards: [],
+            cardPositions: {},
+            commanderCardId: null,
+            isDead: false,
+            recentDamageTaken: 0,
+        },
+    },
+    turnOrder: ['player-1', 'player-2', 'player-3', 'player-4'],
+    activePlayerId: 'player-1',
+    viewingPlayerId: 'player-1',
+
     life: 40,
     turn: 1,
     counters: { ...initialCounters },
@@ -200,6 +262,44 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // Card Positions
     cardPositions: {},
+
+    // Switch which player's board we're viewing (for multiplayer)
+    // Saves current player state before switching, loads new player state
+    switchView: (playerId: string) => {
+        const state = get();
+        const currentPlayerId = state.viewingPlayerId;
+
+        // Don't switch to the same player
+        if (currentPlayerId === playerId) return;
+
+        // Save current player's state back to their player object
+        const updatedPlayers = { ...state.players };
+        updatedPlayers[currentPlayerId] = {
+            ...updatedPlayers[currentPlayerId],
+            life: state.life,
+            cards: state.cards,
+            counters: state.counters,
+            manaPool: state.manaPool,
+            cardPositions: state.cardPositions,
+            commanderCardId: state.commanderCardId,
+        };
+
+        // Load the new player's state into proxy fields
+        const newPlayer = updatedPlayers[playerId];
+        set({
+            players: updatedPlayers,
+            viewingPlayerId: playerId,
+            life: newPlayer.life,
+            cards: newPlayer.cards,
+            counters: newPlayer.counters,
+            manaPool: newPlayer.manaPool,
+            cardPositions: newPlayer.cardPositions,
+            commanderCardId: newPlayer.commanderCardId,
+            // Reset game phase for new player if they haven't started
+            gamePhase: newPlayer.cards.length === 0 ? 'SETUP' : state.gamePhase,
+            gameStarted: newPlayer.cards.length > 0,
+        });
+    },
 
     setInspectCard: (card, cardId = null) => set({ inspectCard: card, inspectCardId: cardId }),
 

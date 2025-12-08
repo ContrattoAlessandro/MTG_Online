@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Settings, Image, RefreshCcw, Check } from 'lucide-react';
+import { useGameStore } from '../store/gameStore';
 import { useSettings } from '../hooks/useSettings';
 
 interface SettingsModalProps {
@@ -10,9 +11,17 @@ interface SettingsModalProps {
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     const { playmatUrl, setPlaymatUrl } = useSettings();
+    const { importDeck, loadDemoDeck, isLoading } = useGameStore();
+
     const [urlInput, setUrlInput] = useState(playmatUrl || '');
     const [previewError, setPreviewError] = useState(false);
     const [saved, setSaved] = useState(false);
+
+    // Deck Import State
+    const [showDeckImport, setShowDeckImport] = useState(false);
+    const [commanderName, setCommanderName] = useState('');
+    const [deckList, setDeckList] = useState('');
+    const [importError, setImportError] = useState<string | null>(null);
 
     // Sync input with stored value when modal opens
     useEffect(() => {
@@ -34,6 +43,28 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         setUrlInput('');
         setPlaymatUrl(null);
         setPreviewError(false);
+    };
+
+    const handleImportDeck = async () => {
+        setImportError(null);
+        const result = await importDeck(commanderName.trim(), deckList);
+        if (!result.success && result.notFound) {
+            setImportError(`Cards not found: ${result.notFound.join(', ')}`);
+        } else if (!result.success) {
+            setImportError('Failed to import deck.');
+        } else {
+            setShowDeckImport(false);
+            setCommanderName('');
+            setDeckList('');
+            onClose(); // Close modal on success
+        }
+    };
+
+    const handleLoadDemo = async () => {
+        setImportError(null);
+        await loadDemoDeck();
+        setShowDeckImport(false);
+        onClose();
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -135,8 +166,64 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                             )}
                         </div>
 
+                        {/* Deck Management Section */}
+                        <div className="pt-2 border-t border-white/10">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-sm font-medium text-gray-300">Deck Management</span>
+                            </div>
+
+                            {!showDeckImport ? (
+                                <button
+                                    onClick={() => setShowDeckImport(true)}
+                                    className="w-full px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                                >
+                                    Import / Replace Deck
+                                </button>
+                            ) : (
+                                <div className="space-y-3 bg-black/20 p-3 rounded-lg border border-white/5">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <h3 className="text-xs font-semibold text-gray-400">Import Deck for Current Player</h3>
+                                        <button onClick={() => setShowDeckImport(false)} className="text-xs text-gray-500 hover:text-white">Cancel</button>
+                                    </div>
+
+                                    <input
+                                        type="text"
+                                        value={commanderName}
+                                        onChange={(e) => setCommanderName(e.target.value)}
+                                        placeholder="Commander Name"
+                                        className="w-full px-3 py-2 bg-gray-900/50 border border-gray-700 rounded text-sm text-gray-200 focus:outline-none focus:border-amber-500"
+                                    />
+
+                                    <textarea
+                                        value={deckList}
+                                        onChange={(e) => setDeckList(e.target.value)}
+                                        placeholder="Paste decklist here..."
+                                        className="w-full h-32 px-3 py-2 bg-gray-900/50 border border-gray-700 rounded text-sm text-gray-200 focus:outline-none focus:border-blue-500 resize-none font-mono"
+                                    />
+
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={handleImportDeck}
+                                            disabled={!commanderName.trim() || isLoading}
+                                            className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm text-white font-medium transition-colors"
+                                        >
+                                            {isLoading ? 'Importing...' : 'Import Deck'}
+                                        </button>
+                                        <button
+                                            onClick={handleLoadDemo}
+                                            disabled={isLoading}
+                                            className="px-3 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 rounded text-sm text-white font-medium transition-colors"
+                                        >
+                                            Demo
+                                        </button>
+                                    </div>
+                                    {importError && <p className="text-xs text-red-400 mt-1">{importError}</p>}
+                                </div>
+                            )}
+                        </div>
+
                         {/* Actions */}
-                        <div className="flex gap-2 pt-2">
+                        <div className="flex gap-2 pt-2 border-t border-white/10">
                             <button
                                 onClick={handleReset}
                                 className="flex items-center gap-2 px-4 py-2 rounded-lg transition-all hover:bg-white/10"
@@ -146,7 +233,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                 }}
                             >
                                 <RefreshCcw className="w-4 h-4 text-gray-400" />
-                                <span className="text-gray-300">Reset</span>
+                                <span className="text-gray-300">Reset Actions</span>
                             </button>
                             <button
                                 onClick={handleSave}
@@ -184,7 +271,11 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                 <div><kbd className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(255, 255, 255, 0.1)' }}>Space</kbd> Next turn</div>
                                 <div><kbd className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(255, 255, 255, 0.1)' }}>U</kbd> Untap all</div>
                                 <div><kbd className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(255, 255, 255, 0.1)' }}>S</kbd> Shuffle</div>
-                                <div><kbd className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(255, 255, 255, 0.1)' }}>Del</kbd> → Graveyard</div>
+                                <div className="col-span-2 mt-2 font-medium text-gray-400">On Hover:</div>
+                                <div><kbd className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(255, 255, 255, 0.1)' }}>P / Enter</kbd> Play</div>
+                                <div><kbd className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(255, 255, 255, 0.1)' }}>T</kbd> Tap / Untap</div>
+                                <div><kbd className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(255, 255, 255, 0.1)' }}>G</kbd> Graveyard</div>
+                                <div><kbd className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(255, 255, 255, 0.1)' }}>E / X</kbd> Exile</div>
                             </div>
                         </div>
                     </div>

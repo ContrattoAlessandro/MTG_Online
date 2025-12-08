@@ -114,6 +114,63 @@ export async function fetchCardsByNames(cardNames: string[]): Promise<Card[]> {
     return allCards;
 }
 
+// Fetch cards by IDs using Scryfall collection endpoint
+export async function fetchCardsByIds(cardIds: string[]): Promise<Card[]> {
+    const BATCH_SIZE = 75;
+    const allCards: Card[] = [];
+
+    for (let i = 0; i < cardIds.length; i += BATCH_SIZE) {
+        const batch = cardIds.slice(i, i + BATCH_SIZE);
+        const identifiers = batch.map(id => ({ id }));
+
+        try {
+            const url = `${SCRYFALL_API}/cards/collection`;
+            const proxyUrl = `${CORS_PROXY}${encodeURIComponent(url)}`;
+
+            const response = await fetch(proxyUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ identifiers }),
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.data) {
+                    allCards.push(...data.data);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching card batch by ID:', error);
+        }
+
+        if (i + BATCH_SIZE < cardIds.length) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+    }
+
+    return allCards;
+}
+
+export async function getTokensForCards(cards: Card[]): Promise<Card[]> {
+    const tokenIds = new Set<string>();
+
+    cards.forEach(card => {
+        if (card.all_parts) {
+            card.all_parts.forEach(part => {
+                if (part.component === 'token') {
+                    tokenIds.add(part.id);
+                }
+            });
+        }
+    });
+
+    if (tokenIds.size === 0) return [];
+
+    return fetchCardsByIds(Array.from(tokenIds));
+}
+
 // Import a full deck from text
 export async function importDeckFromText(deckText: string): Promise<{ cards: Card[]; notFound: string[] }> {
     const parsed = parseDeckList(deckText);

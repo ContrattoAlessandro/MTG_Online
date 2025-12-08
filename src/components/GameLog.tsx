@@ -44,8 +44,7 @@ export default function GameLog() {
             drag
             dragMomentum={false}
             dragElastic={0}
-            className={`fixed bottom-24 right-4 z-40 cursor-grab active:cursor-grabbing ${isCollapsed ? 'w-40' : 'w-80'
-                }`}
+            className={`fixed bottom-24 right-4 z-40 cursor-grab active:cursor-grabbing ${isCollapsed ? 'w-40' : 'w-80'}`}
             whileDrag={{ scale: 1.02 }}
         >
             {/* Header - Premium */}

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, Sparkles, Loader2 } from 'lucide-react';
-import { searchTokens, getCardImageUrl } from '../api/scryfall';
+import { searchTokens, getCardImageUrl, getTokensForCards } from '../api/scryfall';
 import { useGameStore } from '../store/gameStore';
 import { Card } from '../types';
 
@@ -13,22 +13,37 @@ interface TokenSearchModalProps {
 export default function TokenSearchModal({ isOpen, onClose }: TokenSearchModalProps) {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<Card[]>([]);
+    const [suggestedTokens, setSuggestedTokens] = useState<Card[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const createToken = useGameStore((s) => s.createToken);
+    const cards = useGameStore((s) => s.cards);
 
-    // Focus input when modal opens
+    // Focus input and load suggestions when modal opens
     useEffect(() => {
-        if (isOpen && inputRef.current) {
-            inputRef.current.focus();
+        if (isOpen) {
+            if (inputRef.current) {
+                inputRef.current.focus();
+            }
+
+            // Load suggestions from current cards
+            const loadSuggestions = async () => {
+                const uniqueCards = Array.from(new Set(cards.map(c => c.card)));
+                // Filter out tokens to prevent tokens suggesting themselves or other tokens (unless desired)
+                const sourceCards = uniqueCards.filter(c => !c.type_line.toLowerCase().includes('token'));
+                const tokens = await getTokensForCards(sourceCards);
+                setSuggestedTokens(tokens);
+            };
+            loadSuggestions();
         }
         if (!isOpen) {
             setQuery('');
             setResults([]);
             setHasSearched(false);
+            setSuggestedTokens([]);
         }
-    }, [isOpen]);
+    }, [isOpen]); // Removed 'cards' from dependency to avoid refetching on every card change while modal is open
 
     // Debounced search
     useEffect(() => {
@@ -140,19 +155,53 @@ export default function TokenSearchModal({ isOpen, onClose }: TokenSearchModalPr
                                     </motion.button>
                                 ))}
                             </div>
-                        ) : hasSearched && !isLoading ? (
+                        ) : !hasSearched ? (
+                            suggestedTokens.length > 0 ? (
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-2 text-amber-400/80 px-1 border-b border-gray-700 pb-2">
+                                        <Sparkles className="w-4 h-4" />
+                                        <h3 className="font-semibold text-sm uppercase tracking-wider">Suggested from your Deck</h3>
+                                    </div>
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                                        {suggestedTokens.map((card) => (
+                                            <motion.button
+                                                key={card.id}
+                                                initial={{ opacity: 0, scale: 0.9 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                whileHover={{ scale: 1.05, zIndex: 10 }}
+                                                whileTap={{ scale: 0.95 }}
+                                                onClick={() => handleTokenClick(card)}
+                                                className="relative group"
+                                            >
+                                                <img
+                                                    src={getCardImageUrl(card, 'small')}
+                                                    alt={card.name}
+                                                    className="w-full rounded-lg shadow-lg group-hover:ring-2 group-hover:ring-amber-400 transition-all"
+                                                    loading="lazy"
+                                                />
+                                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent rounded-b-lg p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <span className="text-xs text-white font-medium truncate block">
+                                                        {card.name}
+                                                    </span>
+                                                </div>
+                                            </motion.button>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-center text-gray-500 py-8">
+                                    <Search className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                                    <p>Start typing to search for tokens</p>
+                                    <p className="text-sm mt-1">Popular: Soldier, Treasure, Zombie, Spirit, Goblin</p>
+                                </div>
+                            )
+                        ) : (
                             <div className="text-center text-gray-400 py-8">
                                 <Sparkles className="w-12 h-12 mx-auto mb-3 opacity-50" />
                                 <p>No tokens found for "{query}"</p>
                                 <p className="text-sm mt-1">Try a different search term</p>
                             </div>
-                        ) : !hasSearched ? (
-                            <div className="text-center text-gray-500 py-8">
-                                <Search className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                                <p>Start typing to search for tokens</p>
-                                <p className="text-sm mt-1">Popular: Soldier, Treasure, Zombie, Spirit, Goblin</p>
-                            </div>
-                        ) : null}
+                        )}
                     </div>
                 </motion.div>
             </motion.div>

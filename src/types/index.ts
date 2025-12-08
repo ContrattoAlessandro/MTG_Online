@@ -28,6 +28,14 @@ export interface Card {
     set_name?: string;
     set?: string;
     produced_mana?: string[]; // Mana colors this card can produce (for mana rock detection)
+    all_parts?: {
+        object: string;
+        id: string;
+        component: string;
+        name: string;
+        type_line: string;
+        uri: string;
+    }[];
 }
 
 // Card instance in the game (can be tapped, etc.)
@@ -53,12 +61,45 @@ export interface Counters {
     stormCount: number;
 }
 
+// Mana Pool type
+export interface ManaPool {
+    W: number; // White
+    U: number; // Blue
+    B: number; // Black
+    R: number; // Red
+    G: number; // Green
+    C: number; // Colorless
+}
+
+// Player state
+export interface Player {
+    id: string;
+    name: string;
+    avatarUrl?: string; // For the switcher
+    life: number;
+    counters: Counters;
+    manaPool: ManaPool;
+    cards: CardInstance[]; // The player's specific cards
+    cardPositions: Record<string, { x: number; y: number }>; // Persisted positions for this player's board
+    commanderCardId: string | null;
+    isDead: boolean;
+    recentDamageTaken: number; // For tracking commander damage etc later
+}
+
 // Complete game state
 export interface GameState {
+    // Multiplayer State
+    players: Record<string, Player>;
+    turnOrder: string[];
+    activePlayerId: string; // The player whose turn it is
+    viewingPlayerId: string; // The player board currently being inspected/controlled
+
+    // View/Proxy State (These return data for the viewingPlayerId to keep UI compatible)
     life: number;
     turn: number;
     counters: Counters;
     cards: CardInstance[];
+
     isLoading: boolean;
     error: string | null;
     gamePhase: GamePhase;
