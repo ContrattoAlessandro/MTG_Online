@@ -116,7 +116,7 @@ export default function App() {
                 </div>
 
                 {/* Hand - Fixed at Bottom (overlays battlefield) */}
-                <Hand />
+                <Hand onHoverCard={setHoveredCardId} />
 
                 {/* Mana Pool Widget - Fixed at Bottom Left */}
                 <ManaPoolWidget />

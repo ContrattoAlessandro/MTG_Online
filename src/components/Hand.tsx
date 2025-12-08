@@ -1,11 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../store/gameStore';
 import { getCardImageUrl } from '../api/scryfall';
 import ContextMenu from './ContextMenu';
 import { Zone } from '../types';
 
-export default function Hand() {
+interface HandProps {
+    onHoverCard?: (cardId: string | null) => void;
+}
+
+export default function Hand({ onHoverCard }: HandProps) {
     const cards = useGameStore((s) => s.cards);
     const handCards = cards.filter((c) => c.zone === 'hand');
     const moveCard = useGameStore((s) => s.moveCard);
@@ -17,6 +21,11 @@ export default function Hand() {
         y: number;
         cardId: string;
     } | null>(null);
+
+    // Propagate hover state to parent for global keyboard shortcuts
+    useEffect(() => {
+        onHoverCard?.(hoveredId);
+    }, [hoveredId, onHoverCard]);
 
     const handleContextMenu = (e: React.MouseEvent, cardId: string) => {
         e.preventDefault();

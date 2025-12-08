@@ -61,8 +61,7 @@ export default function GameLog() {
                 <GripVertical className="w-4 h-4 text-gray-600 cursor-grab" />
 
                 <span
-                    className="text-sm font-medium font-mono flex-1 text-center cursor-pointer bg-gradient-to-r from-amber-400 to-yellow-300 bg-clip-text text-transparent"
-                    onClick={() => setIsCollapsed(!isCollapsed)}
+                    className="text-sm font-medium font-mono flex-1 text-center bg-gradient-to-r from-amber-400 to-yellow-300 bg-clip-text text-transparent"
                 >
                     📜 Game Log
                 </span>

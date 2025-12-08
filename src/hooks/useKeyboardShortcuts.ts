@@ -13,6 +13,12 @@ import { useSoundEngine } from './useSoundEngine';
  * - Delete/Backspace: Move hovered card to graveyard (requires hoveredCardId)
  * - Ctrl+Z / Cmd+Z: Undo
  * - Ctrl+Shift+Z / Cmd+Shift+Z: Redo
+ * 
+ * Card-specific (when hovering):
+ * - P / Enter: Play card to battlefield (from hand)
+ * - G: Move card to graveyard
+ * - E / X: Move card to exile
+ * - T: Tap/Untap card (on battlefield)
  */
 export function useKeyboardShortcuts(hoveredCardId: string | null = null) {
     const drawCard = useGameStore((s) => s.drawCard);
@@ -20,6 +26,8 @@ export function useKeyboardShortcuts(hoveredCardId: string | null = null) {
     const untapAll = useGameStore((s) => s.untapAll);
     const shuffleLibrary = useGameStore((s) => s.shuffleLibrary);
     const moveCard = useGameStore((s) => s.moveCard);
+    const toggleTap = useGameStore((s) => s.toggleTap);
+    const cards = useGameStore((s) => s.cards);
     const gameStarted = useGameStore((s) => s.gameStarted);
     const undo = useGameStore((s) => s.undo);
     const redo = useGameStore((s) => s.redo);
@@ -86,8 +94,53 @@ export function useKeyboardShortcuts(hoveredCardId: string | null = null) {
                     play('graveyard');
                 }
                 break;
+
+            // Card-specific shortcuts (require hovering over a card)
+            case 'p':
+            case 'enter':
+                // Play card to battlefield (only from hand)
+                if (hoveredCardId) {
+                    const card = cards.find(c => c.id === hoveredCardId);
+                    if (card && card.zone === 'hand') {
+                        e.preventDefault();
+                        moveCard(hoveredCardId, 'battlefield');
+                        play('cardSnap');
+                    }
+                }
+                break;
+
+            case 'g':
+                // Move to graveyard (same as Delete but more intuitive)
+                if (hoveredCardId) {
+                    e.preventDefault();
+                    moveCard(hoveredCardId, 'graveyard');
+                    play('graveyard');
+                }
+                break;
+
+            case 'e':
+            case 'x':
+                // Move to exile
+                if (hoveredCardId) {
+                    e.preventDefault();
+                    moveCard(hoveredCardId, 'exile');
+                    play('exile');
+                }
+                break;
+
+            case 't':
+                // Tap/Untap (only on battlefield)
+                if (hoveredCardId) {
+                    const card = cards.find(c => c.id === hoveredCardId);
+                    if (card && card.zone === 'battlefield') {
+                        e.preventDefault();
+                        toggleTap(hoveredCardId);
+                        play('untap');
+                    }
+                }
+                break;
         }
-    }, [gameStarted, drawCard, nextTurn, untapAll, shuffleLibrary, moveCard, hoveredCardId, play, undo, redo]);
+    }, [gameStarted, drawCard, nextTurn, untapAll, shuffleLibrary, moveCard, toggleTap, cards, hoveredCardId, play, undo, redo]);
 
     useEffect(() => {
         window.addEventListener('keydown', handleKeyDown);
