@@ -18,10 +18,13 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import Lobby from './components/Lobby';
 
 export default function App() {
-    const { gameStarted, isLoading, localPlayerId, isOnlineMode } = useGameStore();
+    const { gameStarted, isLoading, localPlayerId, isOnlineMode, viewingPlayerId } = useGameStore();
     const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
     const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
+    // Check if we're viewing another player's board (blocks interactions)
+    const isViewingOtherPlayer = isOnlineMode && viewingPlayerId !== localPlayerId;
 
     // Global keyboard shortcuts
     useKeyboardShortcuts(hoveredCardId);
@@ -106,10 +109,12 @@ export default function App() {
                         <GraveyardBox />
                         <ExileBox />
 
-                        {/* Create Token Button - Premium */}
+                        {/* Create Token Button - Premium - disabled when viewing other player */}
                         <button
-                            onClick={() => setIsTokenModalOpen(true)}
-                            className="token-btn-premium flex flex-col items-center gap-1 p-2 group"
+                            onClick={() => !isViewingOtherPlayer && setIsTokenModalOpen(true)}
+                            className={`token-btn-premium flex flex-col items-center gap-1 p-2 group ${isViewingOtherPlayer ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            disabled={isViewingOtherPlayer}
+                            title={isViewingOtherPlayer ? 'Cannot create tokens while viewing another player' : 'Create Token'}
                         >
                             <Sparkles className="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
                             <span className="text-xs text-amber-300 font-medium">Token</span>

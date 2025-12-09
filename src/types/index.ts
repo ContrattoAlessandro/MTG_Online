@@ -131,7 +131,7 @@ export interface ZoneModalState {
 }
 
 // Game Log types for history tracking
-export type LogActionType = 'draw' | 'play' | 'tap' | 'life' | 'graveyard' | 'exile' | 'mana' | 'turn' | 'other';
+export type LogActionType = 'draw' | 'play' | 'tap' | 'life' | 'graveyard' | 'exile' | 'mana' | 'turn' | 'create' | 'other';
 
 export interface GameLogEntry {
     id: string;

@@ -164,6 +164,13 @@ export default function ZoneBox({ zone, label, icon }: ZoneBoxProps) {
 function LibraryMenu({ onClose }: { onClose: () => void }) {
     const { drawCards, shuffleLibrary, millCards, toggleTopCardRevealed, putTopCardToBottom, isTopCardRevealed } = useGameStore();
     const cards = useGameStore((s) => s.cards);
+    const isOnlineMode = useGameStore((s) => s.isOnlineMode);
+    const viewingPlayerId = useGameStore((s) => s.viewingPlayerId);
+    const localPlayerId = useGameStore((s) => s.localPlayerId);
+
+    // Block interactions when viewing another player's board
+    const isViewingOtherPlayer = isOnlineMode && viewingPlayerId !== localPlayerId;
+
     const libraryCards = cards.filter((c) => c.zone === 'library');
     const libraryCount = libraryCards.length;
     const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -226,16 +233,34 @@ function LibraryMenu({ onClose }: { onClose: () => void }) {
 
     return (
         <div ref={menuRef} className="fixed left-44 top-20 dropdown-premium py-2 z-[200] min-w-[220px]">
-            <button onClick={() => setIsSearchOpen(true)} className="w-full px-3 py-2 text-left text-sm hover:bg-blue-500/10 flex items-center gap-2 text-blue-400 transition-colors">
+            {/* Warning banner when viewing another player's board */}
+            {isViewingOtherPlayer && (
+                <div className="px-3 py-2 mb-1 bg-amber-500/10 border-b border-amber-500/20">
+                    <span className="text-xs text-amber-400 flex items-center gap-1">
+                        <Eye className="w-3 h-3" /> Viewing only - Cannot interact
+                    </span>
+                </div>
+            )}
+
+            {/* Library browsing actions - blocked for other players */}
+            <button
+                onClick={() => !isViewingOtherPlayer && setIsSearchOpen(true)}
+                className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-500/10 flex items-center gap-2 text-blue-400 transition-colors ${isViewingOtherPlayer ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={isViewingOtherPlayer}
+            >
                 <Search className="w-4 h-4 drop-shadow-[0_0_4px_currentColor]" /> Search Library
             </button>
-            <button onClick={() => setIsStatsOpen(true)} className="w-full px-3 py-2 text-left text-sm hover:bg-purple-500/10 flex items-center gap-2 text-purple-400 transition-colors">
+            <button
+                onClick={() => !isViewingOtherPlayer && setIsStatsOpen(true)}
+                className={`w-full px-3 py-2 text-left text-sm hover:bg-purple-500/10 flex items-center gap-2 text-purple-400 transition-colors ${isViewingOtherPlayer ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={isViewingOtherPlayer}
+            >
                 <BarChart3 className="w-4 h-4 drop-shadow-[0_0_4px_currentColor]" /> Deck Stats
             </button>
             <div className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent my-1" />
 
-            {/* View Top X / Scry */}
-            <div className="px-3 py-2">
+            {/* View Top X / Scry - blocked for other players */}
+            <div className={`px-3 py-2 ${isViewingOtherPlayer ? 'opacity-50' : ''}`}>
                 <div className="flex items-center gap-2 mb-2">
                     <Eye className="w-4 h-4 text-cyan-400" />
                     <span className="text-sm text-gray-300">View Top</span>
@@ -247,41 +272,42 @@ function LibraryMenu({ onClose }: { onClose: () => void }) {
                         onChange={(e) => setViewTopAmount(e.target.value)}
                         className="w-12 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-center"
                         onClick={(e) => e.stopPropagation()}
+                        disabled={isViewingOtherPlayer}
                     />
                 </div>
                 <button
                     onClick={() => setIsScryOpen(true)}
-                    className="w-full px-2 py-1.5 bg-cyan-600 hover:bg-cyan-500 rounded text-sm font-medium"
-                    disabled={libraryCount === 0}
+                    className="w-full px-2 py-1.5 bg-cyan-600 hover:bg-cyan-500 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={libraryCount === 0 || isViewingOtherPlayer}
                 >
                     Scry / View Top Cards
                 </button>
             </div>
             <div className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent my-1" />
 
-            {/* Reveal/Hide Top Card */}
+            {/* Reveal/Hide Top Card - blocked for other players */}
             <button
                 onClick={() => { toggleTopCardRevealed(); }}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-cyan-500/10 flex items-center gap-2 text-cyan-400 transition-colors"
-                disabled={libraryCount === 0}
+                className={`w-full px-3 py-2 text-left text-sm hover:bg-cyan-500/10 flex items-center gap-2 text-cyan-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isViewingOtherPlayer ? 'opacity-50' : ''}`}
+                disabled={libraryCount === 0 || isViewingOtherPlayer}
             >
                 {isTopCardRevealed ? <EyeOff className="w-4 h-4 drop-shadow-[0_0_4px_currentColor]" /> : <Eye className="w-4 h-4 drop-shadow-[0_0_4px_currentColor]" />}
                 {isTopCardRevealed ? 'Hide Top Card' : 'Reveal Top Card'}
             </button>
 
-            {/* Put Top Card to Bottom */}
+            {/* Put Top Card to Bottom - blocked for other players */}
             <button
                 onClick={() => { putTopCardToBottom(); onClose(); }}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-amber-500/10 flex items-center gap-2 text-amber-400 transition-colors"
-                disabled={libraryCount < 2}
+                className={`w-full px-3 py-2 text-left text-sm hover:bg-amber-500/10 flex items-center gap-2 text-amber-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isViewingOtherPlayer ? 'opacity-50' : ''}`}
+                disabled={libraryCount < 2 || isViewingOtherPlayer}
             >
                 <ArrowDownToLine className="w-4 h-4 drop-shadow-[0_0_4px_currentColor]" /> Put Bottom
             </button>
 
             <div className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent my-1" />
 
-            {/* Draw X */}
-            <div className="px-3 py-2 flex items-center gap-2">
+            {/* Draw X - blocked for other players */}
+            <div className={`px-3 py-2 flex items-center gap-2 ${isViewingOtherPlayer ? 'opacity-50' : ''}`}>
                 <ArrowDown className="w-4 h-4 text-green-400 drop-shadow-[0_0_4px_rgba(34,197,94,0.5)]" />
                 <input
                     type="number"
@@ -290,22 +316,25 @@ function LibraryMenu({ onClose }: { onClose: () => void }) {
                     onChange={(e) => setDrawAmount(e.target.value)}
                     className="w-12 px-2 py-1 bg-gray-800/80 border border-gray-600 rounded text-sm text-center focus:border-green-500/50"
                     onClick={(e) => e.stopPropagation()}
+                    disabled={isViewingOtherPlayer}
                 />
                 <button
                     onClick={handleDraw}
-                    className="flex-1 px-2 py-1.5 rounded text-sm font-medium transition-all"
+                    className="flex-1 px-2 py-1.5 rounded text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{
-                        background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.8), rgba(22, 163, 74, 0.9))',
-                        boxShadow: '0 0 10px rgba(34, 197, 94, 0.2)'
+                        background: isViewingOtherPlayer
+                            ? 'rgba(100, 100, 100, 0.5)'
+                            : 'linear-gradient(135deg, rgba(34, 197, 94, 0.8), rgba(22, 163, 74, 0.9))',
+                        boxShadow: isViewingOtherPlayer ? 'none' : '0 0 10px rgba(34, 197, 94, 0.2)'
                     }}
-                    disabled={libraryCount === 0}
+                    disabled={libraryCount === 0 || isViewingOtherPlayer}
                 >
                     Draw
                 </button>
             </div>
 
-            {/* Mill X */}
-            <div className="px-3 py-2 flex items-center gap-2">
+            {/* Mill X - blocked for other players */}
+            <div className={`px-3 py-2 flex items-center gap-2 ${isViewingOtherPlayer ? 'opacity-50' : ''}`}>
                 <Trash2 className="w-4 h-4 text-red-400 drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]" />
                 <input
                     type="number"
@@ -314,22 +343,29 @@ function LibraryMenu({ onClose }: { onClose: () => void }) {
                     onChange={(e) => setMillAmount(e.target.value)}
                     className="w-12 px-2 py-1 bg-gray-800/80 border border-gray-600 rounded text-sm text-center focus:border-red-500/50"
                     onClick={(e) => e.stopPropagation()}
+                    disabled={isViewingOtherPlayer}
                 />
                 <button
                     onClick={handleMill}
-                    className="flex-1 px-2 py-1.5 rounded text-sm font-medium transition-all"
+                    className="flex-1 px-2 py-1.5 rounded text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{
-                        background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.8), rgba(220, 38, 38, 0.9))',
-                        boxShadow: '0 0 10px rgba(239, 68, 68, 0.2)'
+                        background: isViewingOtherPlayer
+                            ? 'rgba(100, 100, 100, 0.5)'
+                            : 'linear-gradient(135deg, rgba(239, 68, 68, 0.8), rgba(220, 38, 38, 0.9))',
+                        boxShadow: isViewingOtherPlayer ? 'none' : '0 0 10px rgba(239, 68, 68, 0.2)'
                     }}
-                    disabled={libraryCount === 0}
+                    disabled={libraryCount === 0 || isViewingOtherPlayer}
                 >
                     Mill
                 </button>
             </div>
 
             <div className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent my-1" />
-            <button onClick={() => { shuffleLibrary(); play('shuffle'); onClose(); }} className="w-full px-3 py-2 text-left text-sm hover:bg-amber-500/10 flex items-center gap-2 text-gray-300 transition-colors">
+            <button
+                onClick={() => { shuffleLibrary(); play('shuffle'); onClose(); }}
+                className={`w-full px-3 py-2 text-left text-sm hover:bg-amber-500/10 flex items-center gap-2 text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isViewingOtherPlayer ? 'opacity-50' : ''}`}
+                disabled={isViewingOtherPlayer}
+            >
                 <Shuffle className="w-4 h-4 text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.5)]" /> Shuffle
             </button>
         </div>

@@ -70,8 +70,15 @@ export default function Battlefield({ onHoverCard }: BattlefieldProps) {
 
     const handleCardClick = (e: React.MouseEvent, cardId: string) => {
         e.stopPropagation();
-        // Only allow card control on your own board
-        if (!isOwnBoard) return;
+
+        // If viewing another player's board, allow inspecting to see the card better
+        if (!isOwnBoard) {
+            const card = cards.find(c => c.id === cardId);
+            if (card) {
+                setInspectCard(card.card, card.id);
+            }
+            return;
+        }
 
         if (targetingMode.active) {
             completeTargeting(cardId);

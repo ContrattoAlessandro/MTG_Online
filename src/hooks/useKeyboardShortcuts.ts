@@ -19,6 +19,8 @@ import { useSoundEngine } from './useSoundEngine';
  * - G: Move card to graveyard
  * - E / X: Move card to exile
  * - T: Tap/Untap card (on battlefield)
+ * 
+ * NOTE: All shortcuts are disabled when viewing another player's board in online mode.
  */
 export function useKeyboardShortcuts(hoveredCardId: string | null = null) {
     const drawCard = useGameStore((s) => s.drawCard);
@@ -31,11 +33,20 @@ export function useKeyboardShortcuts(hoveredCardId: string | null = null) {
     const gameStarted = useGameStore((s) => s.gameStarted);
     const undo = useGameStore((s) => s.undo);
     const redo = useGameStore((s) => s.redo);
+    const isOnlineMode = useGameStore((s) => s.isOnlineMode);
+    const viewingPlayerId = useGameStore((s) => s.viewingPlayerId);
+    const localPlayerId = useGameStore((s) => s.localPlayerId);
     const { play } = useSoundEngine();
 
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
         // Don't trigger shortcuts if game hasn't started
         if (!gameStarted) return;
+
+        // IMPORTANT: Block all actions when viewing another player's board in online mode
+        // This prevents a player from interacting with another player's library, cards, etc.
+        if (isOnlineMode && viewingPlayerId !== localPlayerId) {
+            return;
+        }
 
         // Ignore if typing in input/textarea/contenteditable
         const target = e.target as HTMLElement;
@@ -140,7 +151,7 @@ export function useKeyboardShortcuts(hoveredCardId: string | null = null) {
                 }
                 break;
         }
-    }, [gameStarted, drawCard, nextTurn, untapAll, shuffleLibrary, moveCard, toggleTap, cards, hoveredCardId, play, undo, redo]);
+    }, [gameStarted, drawCard, nextTurn, untapAll, shuffleLibrary, moveCard, toggleTap, cards, hoveredCardId, play, undo, redo, isOnlineMode, viewingPlayerId, localPlayerId]);
 
     useEffect(() => {
         window.addEventListener('keydown', handleKeyDown);

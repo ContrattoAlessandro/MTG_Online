@@ -1115,9 +1115,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
         get().addLogEntry('other', `Kept hand. ${cardsToBottomIds.length} card(s) put on bottom.`);
     },
 
-    // Game Log
-    gameLog: [],
-
     addLogEntry: (actionType, message) => {
         const { turn, gameLog, isOnlineMode, roomChannel, localPlayerId, players, connectedPlayers } = get();
 
