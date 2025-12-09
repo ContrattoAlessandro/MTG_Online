@@ -14,6 +14,7 @@ import {
     Crown,
     RotateCcw,
     Eye,
+    EyeOff,
     Copy,
     Link,
     Unlink,
@@ -29,7 +30,7 @@ interface ContextMenuProps {
 
 export default function ContextMenu({ x, y, cardId, currentZone, onClose }: ContextMenuProps) {
     const menuRef = useRef<HTMLDivElement>(null);
-    const { moveCard, toggleTap, setInspectCard, commanderCardId, duplicateCard, startTargeting, detachCard, reorderCardInZone } = useGameStore();
+    const { moveCard, toggleTap, setInspectCard, commanderCardId, duplicateCard, startTargeting, detachCard, reorderCardInZone, toggleRevealCard } = useGameStore();
     const card = useGameStore((s) => s.cards.find((c) => c.id === cardId));
     const isOnlineMode = useGameStore((s) => s.isOnlineMode);
     const viewingPlayerId = useGameStore((s) => s.viewingPlayerId);
@@ -88,6 +89,15 @@ export default function ContextMenu({ x, y, cardId, currentZone, onClose }: Cont
             disabled: false, // Always enabled
         },
         { type: 'divider', show: true },
+        // Reveal/Hide option for hand cards (show to all players)
+        {
+            icon: card?.isRevealed ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />,
+            label: card?.isRevealed ? 'Hide Card' : 'Reveal Card',
+            action: () => { toggleRevealCard(cardId); play('click'); },
+            show: currentZone === 'hand',
+            color: card?.isRevealed ? 'text-orange-400' : 'text-cyan-400',
+            disabled: isViewingOtherPlayer,
+        },
         // Reorder options (for hand and battlefield)
         {
             icon: <ArrowLeft className="w-4 h-4" />,

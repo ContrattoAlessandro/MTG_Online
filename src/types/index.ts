@@ -48,6 +48,7 @@ export interface CardInstance {
     isToken?: boolean; // Token cards have distinct styling
     attachedToId?: string | null; // ID of the card this is attached to (for Equipment/Auras)
     attachmentIds?: string[]; // IDs of cards attached to this card
+    isRevealed?: boolean; // Whether this card is revealed to all players (for showing cards from hand)
 }
 
 // All counter types in the game

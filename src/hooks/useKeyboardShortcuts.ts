@@ -19,6 +19,8 @@ import { useSoundEngine } from './useSoundEngine';
  * - G: Move card to graveyard
  * - E / X: Move card to exile
  * - T: Tap/Untap card (on battlefield)
+ * - Arrow Left: Move card left (reorder in hand/battlefield)
+ * - Arrow Right: Move card right (reorder in hand/battlefield)
  * 
  * NOTE: All shortcuts are disabled when viewing another player's board in online mode.
  */
@@ -29,6 +31,7 @@ export function useKeyboardShortcuts(hoveredCardId: string | null = null) {
     const shuffleLibrary = useGameStore((s) => s.shuffleLibrary);
     const moveCard = useGameStore((s) => s.moveCard);
     const toggleTap = useGameStore((s) => s.toggleTap);
+    const reorderCardInZone = useGameStore((s) => s.reorderCardInZone);
     const cards = useGameStore((s) => s.cards);
     const gameStarted = useGameStore((s) => s.gameStarted);
     const undo = useGameStore((s) => s.undo);
@@ -150,8 +153,32 @@ export function useKeyboardShortcuts(hoveredCardId: string | null = null) {
                     }
                 }
                 break;
+
+            case 'arrowleft':
+                // Move card left (reorder in hand/battlefield)
+                if (hoveredCardId) {
+                    const card = cards.find(c => c.id === hoveredCardId);
+                    if (card && (card.zone === 'hand' || card.zone === 'battlefield')) {
+                        e.preventDefault();
+                        reorderCardInZone(hoveredCardId, 'left');
+                        play('click');
+                    }
+                }
+                break;
+
+            case 'arrowright':
+                // Move card right (reorder in hand/battlefield)
+                if (hoveredCardId) {
+                    const card = cards.find(c => c.id === hoveredCardId);
+                    if (card && (card.zone === 'hand' || card.zone === 'battlefield')) {
+                        e.preventDefault();
+                        reorderCardInZone(hoveredCardId, 'right');
+                        play('click');
+                    }
+                }
+                break;
         }
-    }, [gameStarted, drawCard, nextTurn, untapAll, shuffleLibrary, moveCard, toggleTap, cards, hoveredCardId, play, undo, redo, isOnlineMode, viewingPlayerId, localPlayerId]);
+    }, [gameStarted, drawCard, nextTurn, untapAll, shuffleLibrary, moveCard, toggleTap, reorderCardInZone, cards, hoveredCardId, play, undo, redo, isOnlineMode, viewingPlayerId, localPlayerId]);
 
     useEffect(() => {
         window.addEventListener('keydown', handleKeyDown);

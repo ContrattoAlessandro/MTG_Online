@@ -99,6 +99,7 @@ interface GameStore extends GameState {
     tapCard: (cardId: string) => void;
     untapCard: (cardId: string) => void;
     toggleTap: (cardId: string) => void;
+    toggleRevealCard: (cardId: string) => void; // Toggle reveal status of a hand card to all players
     untapAll: () => void;
 
     // Library actions
@@ -798,6 +799,25 @@ export const useGameStore = create<GameStore>((set, get) => ({
         if (get().isOnlineMode) get().broadcastPlayerState();
     },
 
+    // Toggle whether a hand card is revealed to all players
+    toggleRevealCard: (cardId) => {
+        const state = get();
+        const card = state.cards.find(c => c.id === cardId);
+        if (!card) return;
+
+        // Only allow revealing cards in hand
+        if (card.zone !== 'hand') return;
+
+        const newRevealedState = !card.isRevealed;
+        set((s) => ({
+            cards: s.cards.map((c) => c.id === cardId ? { ...c, isRevealed: newRevealedState } : c),
+        }));
+
+        const action = newRevealedState ? 'Revealed' : 'Hid';
+        get().addLogEntry('other', `${action} "${card.card.name}" from hand`);
+        if (state.isOnlineMode) get().broadcastPlayerState();
+    },
+
     drawCard: () => {
         const { cards, isOnlineMode } = get();
         const libraryCards = cards.filter(c => c.zone === 'library');
@@ -1336,10 +1356,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // Auto-arrange battlefield cards into smart layout
     autoArrangeBattlefield: () => {
-        const { cards } = get();
+        const { cards, isOnlineMode } = get();
         const newPositions = calculateSmartLayout(cards);
         set({ cardPositions: newPositions });
         get().addLogEntry('other', 'Auto-arranged battlefield');
+        // Broadcast position change in online mode
+        if (isOnlineMode) get().broadcastPlayerState();
     },
 
     // Set individual card position (for drag-and-drop)

@@ -276,6 +276,8 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                 <div><kbd className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(255, 255, 255, 0.1)' }}>T</kbd> Tap / Untap</div>
                                 <div><kbd className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(255, 255, 255, 0.1)' }}>G</kbd> Graveyard</div>
                                 <div><kbd className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(255, 255, 255, 0.1)' }}>E / X</kbd> Exile</div>
+                                <div><kbd className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(255, 255, 255, 0.1)' }}>←</kbd> Move Left</div>
+                                <div><kbd className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(255, 255, 255, 0.1)' }}>→</kbd> Move Right</div>
                             </div>
                         </div>
                     </div>

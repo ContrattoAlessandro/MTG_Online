@@ -132,20 +132,30 @@ export default function Hand({ onHoverCard }: HandProps) {
                                         {/* Card image - BIGGER: w-28 h-40 */}
                                         <motion.div
                                             className={`
-                                                w-28 h-40 rounded-lg overflow-hidden
+                                                w-28 h-40 rounded-lg overflow-hidden relative
                                                 transition-shadow duration-200
                                                 ${isHovered && isOwnHand
                                                     ? 'shadow-[0_0_25px_rgba(255,215,0,0.8)]'
                                                     : 'shadow-lg'
                                                 }
+                                                ${card.isRevealed ? 'ring-2 ring-cyan-400 ring-opacity-70' : ''}
                                             `}
                                         >
                                             <img
-                                                src={isOwnHand ? getCardImageUrl(card.card, 'normal') : CARD_BACK_URL}
-                                                alt={isOwnHand ? card.card.name : 'Hidden card'}
-                                                className={`w-full h-full object-cover pointer-events-none ${!isOwnHand ? 'opacity-80' : ''}`}
+                                                src={(isOwnHand || card.isRevealed) ? getCardImageUrl(card.card, 'normal') : CARD_BACK_URL}
+                                                alt={(isOwnHand || card.isRevealed) ? card.card.name : 'Hidden card'}
+                                                className={`w-full h-full object-cover pointer-events-none ${(!isOwnHand && !card.isRevealed) ? 'opacity-80' : ''}`}
                                                 draggable={false}
                                             />
+                                            {/* Revealed indicator */}
+                                            {card.isRevealed && (
+                                                <div className="absolute top-1 right-1 bg-cyan-500 rounded-full p-1 shadow-lg shadow-cyan-500/50">
+                                                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                    </svg>
+                                                </div>
+                                            )}
                                         </motion.div>
                                     </motion.div>
                                 );
