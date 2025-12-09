@@ -15,9 +15,10 @@ import MulliganModal from './components/MulliganModal';
 import GameLog from './components/GameLog';
 import { PlayerSwitcher } from './components/PlayerSwitcher';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import Lobby from './components/Lobby';
 
 export default function App() {
-    const { gameStarted, isLoading } = useGameStore();
+    const { gameStarted, isLoading, localPlayerId, isOnlineMode } = useGameStore();
     const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
     const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -25,7 +26,13 @@ export default function App() {
     // Global keyboard shortcuts
     useKeyboardShortcuts(hoveredCardId);
 
-    // Show import modal if game hasn't started
+    // Show Lobby if not in online mode and no local player set
+    // (User hasn't chosen to play solo or join/create a room yet)
+    if (!localPlayerId && !isOnlineMode) {
+        return <Lobby />;
+    }
+
+    // Show deck import modal if game hasn't started (but player has selected mode)
     if (!gameStarted) {
         return <DeckImportModal />;
     }

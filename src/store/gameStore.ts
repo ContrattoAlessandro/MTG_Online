@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import { Card, CardInstance, Counters, Zone, GameState, GameLogEntry, LogActionType, GamePhase } from '../types';
+import { Card, CardInstance, Counters, Zone, GameState, GameLogEntry, LogActionType, GamePhase, Player, PlayerPresence } from '../types';
 import { importDeckFromText, isLegendaryCreature, fetchRandomCards } from '../api/scryfall';
 import { DEMO_DECK, DEMO_COMMANDER } from '../data/demoDeck';
 import { calculateSmartLayout, CardPosition } from '../utils/calculateSmartLayout';
+import { supabase, isSupabaseConfigured, generateRoomCode, createRoomChannel, getLocalUserId, RoomChannel } from '../lib/supabaseClient';
 
 // Randomizer result types
 export type RandomResult = {
@@ -157,6 +158,29 @@ interface GameStore extends GameState {
     cardPositions: Record<string, CardPosition>;
     autoArrangeBattlefield: () => void;
     setCardPosition: (cardId: string, x: number, y: number) => void;
+
+    // ============================================
+    // ONLINE MULTIPLAYER STATE & ACTIONS
+    // ============================================
+    isOnlineMode: boolean;
+    roomId: string | null;
+    localPlayerId: string | null;
+    roomChannel: RoomChannel | null;
+    connectedPlayers: Record<string, PlayerPresence>;
+    localUserId: string;
+
+    // Multiplayer Actions
+    createRoom: (playerName: string) => Promise<string>;
+    joinRoom: (roomCode: string, seatId: string, playerName: string) => Promise<boolean>;
+    leaveRoom: () => void;
+    startSoloMode: () => void;
+    broadcastPlayerState: () => void;
+
+    // Internal handlers (prefixed with _)
+    _handleRemotePlayerState: (playerId: string, state: Player) => void;
+    _handlePlayerJoin: (presence: PlayerPresence) => void;
+    _handleRemoteLogEntry: (entry: GameLogEntry, playerId: string) => void;
+    _handlePlayerLeave: (playerId: string) => void;
 }
 
 // Helper to create a snapshot for undo
@@ -262,6 +286,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // Card Positions
     cardPositions: {},
+
+    // ============================================
+    // ONLINE MULTIPLAYER INITIAL STATE
+    // ============================================
+    isOnlineMode: false,
+    roomId: null,
+    localPlayerId: null,
+    roomChannel: null,
+    connectedPlayers: {},
+    localUserId: getLocalUserId(),
 
     // Switch which player's board we're viewing (for multiplayer)
     // Saves current player state before switching, loads new player state
@@ -446,7 +480,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
         set({ gameStarted: false, isLoading: false, error: null });
     },
 
-    setLife: (life) => set({ life }),
+    setLife: (life) => {
+        set({ life });
+        if (get().isOnlineMode) get().broadcastPlayerState();
+    },
+
     adjustLife: (amount) => {
         const snapshot = createSnapshot(get());
         const newLife = get().life + amount;
@@ -456,16 +494,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
             historyFuture: [],
         }));
         get().addLogEntry('life', `Life ${amount >= 0 ? '+' : ''}${amount} → ${newLife}`);
+        if (get().isOnlineMode) get().broadcastPlayerState();
     },
-    incrementTurn: () => set((state) => ({ turn: state.turn + 1 })),
+
+    incrementTurn: () => {
+        set((state) => ({ turn: state.turn + 1 }));
+        if (get().isOnlineMode) get().broadcastPlayerState();
+    },
 
     nextTurn: () => {
         const snapshot = createSnapshot(get());
-        const { cards, turn } = get();
+        const { cards, turn, isOnlineMode } = get();
         const untappedCards = cards.map((c) =>
             c.zone === 'battlefield' ? { ...c, isTapped: false } : c
         );
         const libraryCards = untappedCards.filter((c) => c.zone === 'library');
+
+        // Draw card logic
         if (libraryCards.length > 0) {
             const topCard = libraryCards[0];
             const newCards = untappedCards.map((c) =>
@@ -478,7 +523,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 historyFuture: [],
             }));
             get().addLogEntry('turn', `=== Turn ${turn + 1} ===`);
-            get().addLogEntry('draw', `Drew "${topCard.card.name}"`);
+
+            // Privacy-safe log
+            const message = isOnlineMode ? "Drew a card" : `Drew "${topCard.card.name}"`;
+            get().addLogEntry('draw', message);
         } else {
             set((state) => ({
                 cards: untappedCards,
@@ -488,10 +536,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
             }));
             get().addLogEntry('turn', `=== Turn ${turn + 1} ===`);
         }
+
+        if (isOnlineMode) get().broadcastPlayerState();
     },
 
-    setCounter: (type, value) => set((state) => ({ counters: { ...state.counters, [type]: value } })),
-    adjustCounter: (type, amount) => set((state) => ({ counters: { ...state.counters, [type]: state.counters[type] + amount } })),
+    setCounter: (type, value) => {
+        set((state) => ({ counters: { ...state.counters, [type]: value } }));
+        if (get().isOnlineMode) get().broadcastPlayerState();
+    },
+
+    adjustCounter: (type, amount) => {
+        set((state) => ({ counters: { ...state.counters, [type]: state.counters[type] + amount } }));
+        if (get().isOnlineMode) get().broadcastPlayerState();
+    },
 
     // Move card - enforce commander restriction
     moveCard: (cardId, toZone, position = 'top') => {
@@ -610,6 +667,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const toLabel = zoneLabels[toZone] || toZone;
 
         // Generate appropriate log message based on zone transition
+        const { isOnlineMode } = get();
+
         if (toZone === 'battlefield') {
             get().addLogEntry('play', `"${cardName}" entered the battlefield`);
         } else if (toZone === 'graveyard') {
@@ -622,37 +681,58 @@ export const useGameStore = create<GameStore>((set, get) => ({
             get().addLogEntry('draw', `"${cardName}" returned to hand`);
         } else if (toZone === 'library') {
             const posLabel = position === 'top' ? 'top' : 'bottom';
-            get().addLogEntry('other', `"${cardName}" put on ${posLabel} of library`);
+            const message = isOnlineMode
+                ? `A card put on ${posLabel} of library`
+                : `"${cardName}" put on ${posLabel} of library`;
+            get().addLogEntry('other', message);
         } else if (toZone === 'commandZone') {
             get().addLogEntry('other', `"${cardName}" returned to command zone`);
         } else if (fromZone !== toZone) {
             get().addLogEntry('other', `"${cardName}" moved from ${fromLabel} to ${toLabel}`);
         }
+
+        if (isOnlineMode) get().broadcastPlayerState();
     },
 
-    tapCard: (cardId) => set((state) => ({
-        cards: state.cards.map((c) => c.id === cardId ? { ...c, isTapped: true } : c),
-    })),
+    tapCard: (cardId) => {
+        set((state) => ({
+            cards: state.cards.map((c) => c.id === cardId ? { ...c, isTapped: true } : c),
+        }));
+        if (get().isOnlineMode) get().broadcastPlayerState();
+    },
 
-    untapCard: (cardId) => set((state) => ({
-        cards: state.cards.map((c) => c.id === cardId ? { ...c, isTapped: false } : c),
-    })),
+    untapCard: (cardId) => {
+        set((state) => ({
+            cards: state.cards.map((c) => c.id === cardId ? { ...c, isTapped: false } : c),
+        }));
+        if (get().isOnlineMode) get().broadcastPlayerState();
+    },
 
-    toggleTap: (cardId) => set((state) => ({
-        cards: state.cards.map((c) => c.id === cardId ? { ...c, isTapped: !c.isTapped } : c),
-    })),
+    toggleTap: (cardId) => {
+        set((state) => ({
+            cards: state.cards.map((c) => c.id === cardId ? { ...c, isTapped: !c.isTapped } : c),
+        }));
+        if (get().isOnlineMode) get().broadcastPlayerState();
+    },
 
-    untapAll: () => set((state) => ({
-        cards: state.cards.map((c) => c.zone === 'battlefield' ? { ...c, isTapped: false } : c),
-    })),
+    untapAll: () => {
+        set((state) => ({
+            cards: state.cards.map((c) => c.zone === 'battlefield' ? { ...c, isTapped: false } : c),
+        }));
+        if (get().isOnlineMode) get().broadcastPlayerState();
+    },
 
     drawCard: () => {
-        const { cards } = get();
+        const { cards, isOnlineMode } = get();
         const libraryCards = cards.filter(c => c.zone === 'library');
         if (libraryCards.length === 0) return;
 
         const topCard = libraryCards[0];
         get().moveCard(topCard.id, 'hand');
+
+        // Log the draw - hide card name in online mode for privacy
+        const message = isOnlineMode ? "Drew a card" : `Drew "${topCard.card.name}"`;
+        get().addLogEntry('draw', message);
     },
 
     drawCards: (count) => {
@@ -671,6 +751,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
         set({ cards: [...otherCards, ...libraryCards] });
         get().addLogEntry('other', `Shuffled library`);
+        if (get().isOnlineMode) get().broadcastPlayerState();
     },
 
     millCard: () => {
@@ -1003,6 +1084,51 @@ export const useGameStore = create<GameStore>((set, get) => ({
         get().addLogEntry('other', `Kept hand. ${cardsToBottomIds.length} card(s) put on bottom.`);
     },
 
+    // Game Log
+    gameLog: [],
+
+    addLogEntry: (actionType, message) => {
+        const { turn, gameLog, isOnlineMode, roomChannel, localPlayerId, players, connectedPlayers } = get();
+
+        let displayMessage = message;
+
+        // In online mode, prefix with player name if not already present
+        if (isOnlineMode && localPlayerId) {
+            const playerName = connectedPlayers[localPlayerId]?.name
+                || players[localPlayerId]?.name
+                || `Player ${localPlayerId.replace('player-', '')}`;
+
+            // Only prefix if it doesn't already start with [PlayerName]
+            if (!message.startsWith(`[${playerName}]`)) {
+                displayMessage = `[${playerName}] ${message}`;
+            }
+        }
+
+        const entry: GameLogEntry = {
+            id: uuidv4(),
+            turn,
+            timestamp: Date.now(),
+            actionType,
+            message: displayMessage,
+        };
+
+        set({ gameLog: [...gameLog, entry].slice(-100) });
+
+        // Broadcast log entry in online mode
+        if (isOnlineMode && roomChannel && localPlayerId) {
+            roomChannel.send({
+                type: 'broadcast',
+                event: 'game_log',
+                payload: {
+                    entry,
+                    playerId: localPlayerId
+                },
+            });
+        }
+    },
+
+    clearGameLog: () => set({ gameLog: [] }),
+
     // Attachment Actions
     attachCard: (sourceId, targetId) => {
         const state = get();
@@ -1128,11 +1254,391 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // Set individual card position (for drag-and-drop)
     setCardPosition: (cardId, x, y) => {
-        set((state) => ({
+        const state = get();
+        set((s) => ({
             cardPositions: {
-                ...state.cardPositions,
+                ...s.cardPositions,
                 [cardId]: { x, y },
             },
         }));
+        // Broadcast position change in online mode
+        if (state.isOnlineMode) {
+            get().broadcastPlayerState();
+        }
+    },
+
+    // ============================================
+    // ONLINE MULTIPLAYER ACTIONS
+    // ============================================
+
+    /**
+     * Create a new game room as host.
+     * Returns the room code for others to join.
+     */
+    createRoom: async (playerName: string) => {
+        if (!isSupabaseConfigured()) {
+            console.error('Supabase not configured. Check your .env file.');
+            return '';
+        }
+
+        const roomCode = generateRoomCode();
+        const channel = createRoomChannel(roomCode);
+
+        // Set up event listeners for the room channel
+        channel
+            .on('broadcast', { event: 'player_state' }, (payload) => {
+                const { playerId, state } = payload.payload as { playerId: string; state: Player };
+                get()._handleRemotePlayerState(playerId, state);
+            })
+            .on('broadcast', { event: 'player_join' }, (payload) => {
+                const presence = payload.payload as PlayerPresence;
+                get()._handlePlayerJoin(presence);
+            })
+            .on('broadcast', { event: 'game_log' }, (payload) => {
+                const { entry, playerId } = payload.payload as { entry: GameLogEntry; playerId: string };
+                get()._handleRemoteLogEntry(entry, playerId);
+            })
+            .on('broadcast', { event: 'presence_ping' }, () => {
+                const { localPlayerId, connectedPlayers, localUserId, players } = get();
+                if (!localPlayerId) return;
+
+                const ourName = connectedPlayers[localPlayerId]?.name
+                    || players[localPlayerId]?.name
+                    || `Player ${localPlayerId.replace('player-', '')}`;
+
+                const presence: PlayerPresence = {
+                    userId: localUserId,
+                    playerId: localPlayerId,
+                    name: ourName,
+                    status: 'connected',
+                    lastSeen: Date.now(),
+                };
+
+                channel.send({
+                    type: 'broadcast',
+                    event: 'player_join',
+                    payload: presence,
+                });
+            })
+            .on('broadcast', { event: 'player_leave' }, (payload) => {
+                const { playerId } = payload.payload as { playerId: string };
+                get()._handlePlayerLeave(playerId);
+            });
+
+        // Subscribe and wait for confirmation
+        await new Promise<void>((resolve) => {
+            channel.subscribe((status) => {
+                if (status === 'SUBSCRIBED') resolve();
+            });
+        });
+
+        // Update local player info with provided name
+        const updatedPlayers = { ...get().players };
+        updatedPlayers['player-1'] = {
+            ...updatedPlayers['player-1'],
+            name: playerName,
+        };
+
+        set({
+            isOnlineMode: true,
+            roomId: roomCode,
+            localPlayerId: 'player-1', // Host is always player 1
+            roomChannel: channel,
+            players: updatedPlayers,
+            connectedPlayers: {
+                'player-1': {
+                    userId: get().localUserId,
+                    playerId: 'player-1',
+                    name: playerName,
+                    status: 'connected',
+                    lastSeen: Date.now(),
+                },
+            },
+        });
+
+        get().addLogEntry('other', `Created room: ${roomCode}`);
+        return roomCode;
+    },
+
+    /**
+     * Join an existing game room.
+     */
+    joinRoom: async (roomCode, seatId, playerName) => {
+        if (!isSupabaseConfigured()) {
+            console.error('Supabase not configured.');
+            return false;
+        }
+
+        const channel = createRoomChannel(roomCode);
+
+        // Set up event listeners
+        channel
+            .on('broadcast', { event: 'player_state' }, (payload) => {
+                const { playerId, state } = payload.payload as { playerId: string; state: Player };
+                get()._handleRemotePlayerState(playerId, state);
+            })
+            .on('broadcast', { event: 'player_join' }, (payload) => {
+                const presence = payload.payload as PlayerPresence;
+                get()._handlePlayerJoin(presence);
+            })
+            .on('broadcast', { event: 'game_log' }, (payload) => {
+                const { entry, playerId } = payload.payload as { entry: GameLogEntry; playerId: string };
+                get()._handleRemoteLogEntry(entry, playerId);
+            })
+            .on('broadcast', { event: 'presence_ping' }, () => {
+                const { localPlayerId, connectedPlayers, localUserId, players } = get();
+                if (!localPlayerId) return;
+
+                const ourName = connectedPlayers[localPlayerId]?.name
+                    || players[localPlayerId]?.name
+                    || `Player ${localPlayerId.replace('player-', '')}`;
+
+                const presence: PlayerPresence = {
+                    userId: localUserId,
+                    playerId: localPlayerId,
+                    name: ourName,
+                    status: 'connected',
+                    lastSeen: Date.now(),
+                };
+
+                channel.send({
+                    type: 'broadcast',
+                    event: 'player_join',
+                    payload: presence,
+                });
+            })
+            .on('broadcast', { event: 'player_leave' }, (payload) => {
+                const { playerId } = payload.payload as { playerId: string };
+                get()._handlePlayerLeave(playerId);
+            });
+
+        // Subscribe and wait for confirmation
+        await new Promise<void>((resolve) => {
+            channel.subscribe((status) => {
+                if (status === 'SUBSCRIBED') resolve();
+            });
+        });
+
+        // Update local player info
+        const updatedPlayers = { ...get().players };
+        updatedPlayers[seatId] = {
+            ...updatedPlayers[seatId],
+            name: playerName,
+        };
+
+        set({
+            isOnlineMode: true,
+            roomId: roomCode,
+            localPlayerId: seatId,
+            viewingPlayerId: seatId,
+            roomChannel: channel,
+            players: updatedPlayers,
+            connectedPlayers: {
+                [seatId]: {
+                    userId: get().localUserId,
+                    playerId: seatId,
+                    name: playerName,
+                    status: 'connected',
+                    lastSeen: Date.now(),
+                },
+            },
+        });
+
+        // Announce our presence to the room
+        const presence: PlayerPresence = {
+            userId: get().localUserId,
+            playerId: seatId,
+            name: playerName,
+            status: 'connected',
+            lastSeen: Date.now(),
+        };
+
+        channel.send({
+            type: 'broadcast',
+            event: 'player_join',
+            payload: presence,
+        });
+
+        get().addLogEntry('other', `Joined room: ${roomCode} as ${playerName}`);
+        return true;
+    },
+
+    /**
+     * Leave the current room and cleanup.
+     */
+    leaveRoom: () => {
+        const { roomChannel, localPlayerId, isOnlineMode } = get();
+
+        if (roomChannel && isOnlineMode) {
+            // Notify others we're leaving
+            roomChannel.send({
+                type: 'broadcast',
+                event: 'player_leave',
+                payload: { playerId: localPlayerId },
+            });
+
+            // Unsubscribe and remove channel
+            supabase.removeChannel(roomChannel);
+        }
+
+        set({
+            isOnlineMode: false,
+            roomId: null,
+            localPlayerId: null,
+            roomChannel: null,
+            connectedPlayers: {},
+        });
+    },
+
+    /**
+     * Start solo (offline) mode - bypasses multiplayer.
+     */
+    startSoloMode: () => {
+        set({
+            isOnlineMode: false,
+            roomId: null,
+            localPlayerId: 'player-1',
+            viewingPlayerId: 'player-1',
+        });
+    },
+
+    /**
+     * Broadcast the local player's current state to the room.
+     * Called after any state-mutating action in online mode.
+     */
+    broadcastPlayerState: () => {
+        const { roomChannel, localPlayerId, isOnlineMode, life, cards, counters, manaPool, cardPositions, commanderCardId, players, isTopCardRevealed } = get();
+
+        if (!isOnlineMode || !roomChannel || !localPlayerId) return;
+
+        // Get full player state
+        const playerState: Player = {
+            ...players[localPlayerId],
+            life,
+            cards,
+            counters,
+            manaPool,
+            cardPositions,
+            commanderCardId,
+            isTopCardRevealed,
+        };
+
+        roomChannel.send({
+            type: 'broadcast',
+            event: 'player_state',
+            payload: {
+                playerId: localPlayerId,
+                state: playerState,
+                timestamp: Date.now(),
+            },
+        });
+    },
+
+    /**
+     * Handle incoming state update from another player.
+     */
+    _handleRemotePlayerState: (playerId, state) => {
+        const { localPlayerId, players } = get();
+
+        // Never overwrite our own state from remote
+        if (playerId === localPlayerId) return;
+
+        // Merge remote player state into players record
+        const updatedPlayers = {
+            ...players,
+            [playerId]: state,
+        };
+
+        set({ players: updatedPlayers });
+
+        // If we're currently viewing this player, update the proxy fields too
+        if (get().viewingPlayerId === playerId) {
+            set({
+                life: state.life,
+                cards: state.cards,
+                counters: state.counters,
+                manaPool: state.manaPool,
+                cardPositions: state.cardPositions,
+                commanderCardId: state.commanderCardId,
+                isTopCardRevealed: state.isTopCardRevealed ?? false,
+            });
+        }
+    },
+
+    /**
+     * Handle a player joining the room.
+     * When a new player joins, we re-broadcast our own presence so they can see us.
+     */
+    _handlePlayerJoin: (presence) => {
+        const { connectedPlayers, localPlayerId, roomChannel, localUserId } = get();
+
+        // Don't process our own join event
+        if (presence.playerId === localPlayerId) return;
+
+        // Check if we already know about this player (prevent infinite loop)
+        const alreadyKnown = connectedPlayers[presence.playerId]?.status === 'connected';
+
+        // Always update the player info (in case name changed etc)
+        set({
+            connectedPlayers: {
+                ...connectedPlayers,
+                [presence.playerId]: presence,
+            },
+        });
+
+        // Only log and re-broadcast if this is a NEW player we didn't know about
+        if (!alreadyKnown) {
+            get().addLogEntry('other', `${presence.name} joined the game`);
+
+            // Re-broadcast our own presence so the new player can see us
+            if (roomChannel && localPlayerId) {
+                const ourName = connectedPlayers[localPlayerId]?.name
+                    || get().players[localPlayerId]?.name
+                    || `Player ${localPlayerId.replace('player-', '')}`;
+
+                const ourPresence: PlayerPresence = {
+                    userId: localUserId,
+                    playerId: localPlayerId,
+                    name: ourName,
+                    status: 'connected',
+                    lastSeen: Date.now(),
+                };
+
+                roomChannel.send({
+                    type: 'broadcast',
+                    event: 'player_join',
+                    payload: ourPresence,
+                });
+            }
+        }
+    },
+
+    /**
+     * Handle remote log entry
+     */
+    _handleRemoteLogEntry: (entry, playerId) => {
+        const { gameLog, localPlayerId } = get();
+        if (playerId === localPlayerId) return; // Ignore own logs if echoed
+
+        // Prevent duplicates
+        if (gameLog.some(e => e.id === entry.id)) return;
+
+        // Entry already contains the player name prefix from the sender's addLogEntry call
+        // So we just add it directly without modifying
+        set({ gameLog: [...gameLog, entry].slice(-100) });
+    },
+
+    /**
+     * Handle a player leaving the room.
+     */
+    _handlePlayerLeave: (playerId) => {
+        const { connectedPlayers } = get();
+        const playerName = connectedPlayers[playerId]?.name || playerId;
+
+        const updatedConnected = { ...connectedPlayers };
+        delete updatedConnected[playerId];
+
+        set({ connectedPlayers: updatedConnected });
+        get().addLogEntry('other', `${playerName} left the game`);
     },
 }));

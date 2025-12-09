@@ -22,6 +22,7 @@ import {
     Settings,
     Undo2,
     Redo2,
+    LogOut,
 } from 'lucide-react';
 
 interface TopNavProps {
@@ -59,6 +60,8 @@ export default function TopNav({ onOpenSettings }: TopNavProps) {
         redo,
         historyPast,
         historyFuture,
+        isOnlineMode,
+        leaveRoom,
     } = useGameStore();
 
     const { isMuted, toggleMute } = useSoundSettings();
@@ -286,35 +289,56 @@ export default function TopNav({ onOpenSettings }: TopNavProps) {
                     <Settings className="w-5 h-5 text-gray-400 hover:text-amber-400 transition-colors" />
                 </button>
 
-                {/* Reset Match - Premium */}
-                <button
-                    onClick={resetMatch}
-                    className="relative group flex items-center gap-2 px-3 py-2 rounded-xl transition-all overflow-hidden"
-                    style={{
-                        background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.1))',
-                        border: '1px solid rgba(251, 191, 36, 0.25)'
-                    }}
-                    title="Reset Match: Keep deck, reset life/turn, shuffle & draw 7"
-                >
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <RotateCcw className="w-4 h-4 text-amber-400 relative z-10" />
-                    <span className="hidden sm:inline text-amber-400 relative z-10">Reset Match</span>
-                </button>
+                {/* Reset Match - Premium (only in offline mode) */}
+                {!isOnlineMode && (
+                    <button
+                        onClick={resetMatch}
+                        className="relative group flex items-center gap-2 px-3 py-2 rounded-xl transition-all overflow-hidden"
+                        style={{
+                            background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.1))',
+                            border: '1px solid rgba(251, 191, 36, 0.25)'
+                        }}
+                        title="Reset Match: Keep deck, reset life/turn, shuffle & draw 7"
+                    >
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <RotateCcw className="w-4 h-4 text-amber-400 relative z-10" />
+                        <span className="hidden sm:inline text-amber-400 relative z-10">Reset Match</span>
+                    </button>
+                )}
 
-                {/* Change Deck - Premium */}
-                <button
-                    onClick={returnToMenu}
-                    className="relative group flex items-center gap-2 px-3 py-2 rounded-xl transition-all overflow-hidden"
-                    style={{
-                        background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.1))',
-                        border: '1px solid rgba(239, 68, 68, 0.25)'
-                    }}
-                    title="Change Deck: Return to deck import screen"
-                >
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-red-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <ArrowLeft className="w-4 h-4 text-red-400 relative z-10" />
-                    <span className="hidden sm:inline text-red-400 relative z-10">Change Deck</span>
-                </button>
+                {/* Change Deck - Premium (only in offline mode) */}
+                {!isOnlineMode && (
+                    <button
+                        onClick={returnToMenu}
+                        className="relative group flex items-center gap-2 px-3 py-2 rounded-xl transition-all overflow-hidden"
+                        style={{
+                            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.1))',
+                            border: '1px solid rgba(239, 68, 68, 0.25)'
+                        }}
+                        title="Change Deck: Return to deck import screen"
+                    >
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-red-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ArrowLeft className="w-4 h-4 text-red-400 relative z-10" />
+                        <span className="hidden sm:inline text-red-400 relative z-10">Change Deck</span>
+                    </button>
+                )}
+
+                {/* Leave Table - Premium (only in online mode) */}
+                {isOnlineMode && (
+                    <button
+                        onClick={leaveRoom}
+                        className="relative group flex items-center gap-2 px-3 py-2 rounded-xl transition-all overflow-hidden"
+                        style={{
+                            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.1))',
+                            border: '1px solid rgba(239, 68, 68, 0.25)'
+                        }}
+                        title="Leave Table: Exit the online game"
+                    >
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-red-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <LogOut className="w-4 h-4 text-red-400 relative z-10" />
+                        <span className="hidden sm:inline text-red-400 relative z-10">Leave Table</span>
+                    </button>
+                )}
             </div>
         </nav>
     );

@@ -10,7 +10,10 @@ export default function MulliganModal() {
         cards,
         mulliganCount,
         mulligan,
-        keepHand
+        keepHand,
+        isOnlineMode,
+        localPlayerId,
+        viewingPlayerId
     } = useGameStore();
 
     const { play } = useSoundEngine();
@@ -25,7 +28,12 @@ export default function MulliganModal() {
         setIsShuffling(false);
     }, [handCards.length, mulliganCount]);
 
+    // Don't show if not in mulligan phase
     if (gamePhase !== 'MULLIGAN') return null;
+
+    // In online mode, only show mulligan for your own player
+    // Don't show when viewing another player's board
+    if (isOnlineMode && viewingPlayerId !== localPlayerId) return null;
 
     const toggleCard = (id: string) => {
         if (mulliganCount === 0) return;

@@ -84,6 +84,7 @@ export interface Player {
     commanderCardId: string | null;
     isDead: boolean;
     recentDamageTaken: number; // For tracking commander damage etc later
+    isTopCardRevealed?: boolean; // Whether the player's top library card is revealed
 }
 
 // Complete game state
@@ -138,4 +139,49 @@ export interface GameLogEntry {
     timestamp: number;
     actionType: LogActionType;
     message: string;
+}
+
+// ============================================
+// MULTIPLAYER TYPES (Supabase Realtime)
+// ============================================
+
+// Connection status for a player in a room
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
+
+// Player presence in a room (for the lobby and connection status)
+export interface PlayerPresence {
+    userId: string;        // Unique user ID (persisted in localStorage)
+    playerId: string;      // Seat assignment (player-1, player-2, etc.)
+    name: string;          // Display name
+    status: ConnectionStatus;
+    lastSeen: number;      // Timestamp
+}
+
+// Broadcast payload types for Supabase Realtime
+export type BroadcastEventType =
+    | 'player_state_update'    // Full player state sync
+    | 'player_join'            // Player joined room
+    | 'player_leave'           // Player left room
+    | 'game_action';           // Individual game action
+
+// Payload for player state broadcasts
+export interface PlayerStateBroadcast {
+    playerId: string;
+    state: Player;
+    timestamp: number;
+}
+
+// Payload for player join/leave
+export interface PlayerJoinPayload {
+    userId: string;
+    playerId: string;
+    name: string;
+}
+
+// Room metadata
+export interface RoomInfo {
+    roomId: string;
+    hostUserId: string;
+    createdAt: number;
+    players: Record<string, PlayerPresence>;
 }

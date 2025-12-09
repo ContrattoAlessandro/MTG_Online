@@ -8,7 +8,7 @@ import ContextMenu from './ContextMenu';
 import TargetingOverlay from './TargetingOverlay';
 import { Zone } from '../types';
 import { GlowStreak } from './MotionTrail';
-import { LayoutGrid } from 'lucide-react';
+import { LayoutGrid, Eye } from 'lucide-react';
 
 interface BattlefieldProps {
     onHoverCard?: (cardId: string | null) => void;
@@ -30,6 +30,16 @@ export default function Battlefield({ onHoverCard }: BattlefieldProps) {
         cancelTargeting,
         autoArrangeBattlefield
     } = useGameStore();
+
+    // Online mode - check if viewing own board or spectating
+    const isOnlineMode = useGameStore((s) => s.isOnlineMode);
+    const localPlayerId = useGameStore((s) => s.localPlayerId);
+    const viewingPlayerId = useGameStore((s) => s.viewingPlayerId);
+    const players = useGameStore((s) => s.players);
+
+    // In online mode, you can only control your own board
+    const isOwnBoard = !isOnlineMode || localPlayerId === viewingPlayerId;
+    const viewingPlayerName = players[viewingPlayerId]?.name || 'Unknown';
 
     const { play } = useSoundEngine();
     const { playmatUrl } = useSettings();
@@ -60,6 +70,9 @@ export default function Battlefield({ onHoverCard }: BattlefieldProps) {
 
     const handleCardClick = (e: React.MouseEvent, cardId: string) => {
         e.stopPropagation();
+        // Only allow card control on your own board
+        if (!isOwnBoard) return;
+
         if (targetingMode.active) {
             completeTargeting(cardId);
         } else {
@@ -75,12 +88,16 @@ export default function Battlefield({ onHoverCard }: BattlefieldProps) {
 
     const handleCardDoubleClick = (e: React.MouseEvent, card: typeof battlefieldCards[0]) => {
         e.stopPropagation();
+        // Inspect always works - viewing cards is allowed
         setInspectCard(card.card, card.id);
     };
 
     const handleContextMenu = (e: React.MouseEvent, cardId: string) => {
         e.preventDefault();
         e.stopPropagation();
+        // Only allow context menu on your own board
+        if (!isOwnBoard) return;
+
         if (targetingMode.active) {
             cancelTargeting();
             return;
@@ -90,6 +107,8 @@ export default function Battlefield({ onHoverCard }: BattlefieldProps) {
 
     const handleAutoArrange = (e: React.MouseEvent) => {
         e.stopPropagation();
+        // Only allow auto-arrange on your own board
+        if (!isOwnBoard) return;
         autoArrangeBattlefield();
         play('cardSnap');
     };
@@ -124,8 +143,16 @@ export default function Battlefield({ onHoverCard }: BattlefieldProps) {
         >
             <TargetingOverlay />
 
-            {/* Auto-Arrange Button */}
-            {battlefieldCards.length > 0 && (
+            {/* Spectating Banner - shown when viewing another player's board */}
+            {isOnlineMode && !isOwnBoard && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600/80 border border-blue-400/50 backdrop-blur-sm text-white shadow-lg">
+                    <Eye className="w-4 h-4" />
+                    <span className="text-sm font-medium">Viewing {viewingPlayerName}'s board</span>
+                </div>
+            )}
+
+            {/* Auto-Arrange Button - only show on own board */}
+            {isOwnBoard && battlefieldCards.length > 0 && (
                 <button
                     onClick={handleAutoArrange}
                     className="absolute top-4 right-4 z-50 flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all overflow-hidden group"
