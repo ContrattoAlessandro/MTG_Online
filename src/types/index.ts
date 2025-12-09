@@ -38,13 +38,19 @@ export interface Card {
     }[];
 }
 
+// Counter type for card counters
+export interface CardCounter {
+    type: 'plus1' | 'minus1' | 'loyalty' | string; // Built-in types + custom
+    count: number;
+}
+
 // Card instance in the game (can be tapped, etc.)
 export interface CardInstance {
     id: string; // Unique instance ID
     card: Card;
     isTapped: boolean;
     zone: Zone;
-    counters: number; // Generic counters on the card
+    counters: CardCounter[]; // Array of typed counters on the card
     isToken?: boolean; // Token cards have distinct styling
     attachedToId?: string | null; // ID of the card this is attached to (for Equipment/Auras)
     attachmentIds?: string[]; // IDs of cards attached to this card

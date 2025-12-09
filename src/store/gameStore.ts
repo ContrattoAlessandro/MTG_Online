@@ -102,6 +102,11 @@ interface GameStore extends GameState {
     toggleRevealCard: (cardId: string) => void; // Toggle reveal status of a hand card to all players
     untapAll: () => void;
 
+    // Card Counter actions
+    addCardCounter: (cardId: string, counterType: string) => void;
+    removeCardCounter: (cardId: string, counterType: string) => void;
+    adjustCardCounter: (cardId: string, counterType: string, amount: number) => void;
+
     // Library actions
     drawCard: () => void;
     drawCards: (count: number) => void;
@@ -385,7 +390,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 card: commander,
                 isTapped: false,
                 zone: 'commandZone',
-                counters: 0,
+                counters: [],
                 attachmentIds: [],
                 attachedToId: null,
             });
@@ -397,7 +402,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                     card,
                     isTapped: false,
                     zone: 'library',
-                    counters: 0,
+                    counters: [],
                     attachmentIds: [],
                     attachedToId: null,
                 });
@@ -463,7 +468,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                     card,
                     isTapped: false,
                     zone: i === commanderIndex ? 'commandZone' : 'library',
-                    counters: 0,
+                    counters: [],
                     attachmentIds: [],
                     attachedToId: null,
                 });
@@ -504,11 +509,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
     },
 
     setLife: (life) => {
+        const { isOnlineMode, viewingPlayerId, localPlayerId } = get();
+        // Guard: In online mode, only allow modifying your own state
+        if (isOnlineMode && viewingPlayerId !== localPlayerId) return;
+
         set({ life });
-        if (get().isOnlineMode) get().broadcastPlayerState();
+        if (isOnlineMode) get().broadcastPlayerState();
     },
 
     adjustLife: (amount) => {
+        const { isOnlineMode, viewingPlayerId, localPlayerId } = get();
+        // Guard: In online mode, only allow modifying your own state
+        if (isOnlineMode && viewingPlayerId !== localPlayerId) return;
+
         const snapshot = createSnapshot(get());
         const newLife = get().life + amount;
         set((state) => ({
@@ -517,7 +530,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             historyFuture: [],
         }));
         get().addLogEntry('life', `Life ${amount >= 0 ? '+' : ''}${amount} → ${newLife}`);
-        if (get().isOnlineMode) get().broadcastPlayerState();
+        if (isOnlineMode) get().broadcastPlayerState();
     },
 
     incrementTurn: () => {
@@ -564,13 +577,36 @@ export const useGameStore = create<GameStore>((set, get) => ({
     },
 
     setCounter: (type, value) => {
+        const { isOnlineMode, viewingPlayerId, localPlayerId } = get();
+        // Guard: In online mode, only allow modifying your own state
+        if (isOnlineMode && viewingPlayerId !== localPlayerId) return;
+
         set((state) => ({ counters: { ...state.counters, [type]: value } }));
-        if (get().isOnlineMode) get().broadcastPlayerState();
+        if (isOnlineMode) get().broadcastPlayerState();
     },
 
     adjustCounter: (type, amount) => {
+        const { isOnlineMode, viewingPlayerId, localPlayerId, counters } = get();
+        // Guard: In online mode, only allow modifying your own state
+        if (isOnlineMode && viewingPlayerId !== localPlayerId) return;
+
+        const newValue = counters[type] + amount;
         set((state) => ({ counters: { ...state.counters, [type]: state.counters[type] + amount } }));
-        if (get().isOnlineMode) get().broadcastPlayerState();
+
+        // Log the counter change
+        const counterLabels: Record<string, string> = {
+            poison: 'Poison',
+            energy: 'Energy',
+            experience: 'Experience',
+            rad: 'Rad',
+            tickets: 'Tickets',
+            commanderTax: 'Commander Tax',
+            stormCount: 'Storm Count',
+        };
+        const label = counterLabels[type] || type;
+        get().addLogEntry('other', `${label} ${amount >= 0 ? '+' : ''}${amount} → ${newValue}`);
+
+        if (isOnlineMode) get().broadcastPlayerState();
     },
 
     // Move card - enforce commander restriction
@@ -818,6 +854,126 @@ export const useGameStore = create<GameStore>((set, get) => ({
         if (state.isOnlineMode) get().broadcastPlayerState();
     },
 
+    // Add a counter to a card
+    addCardCounter: (cardId: string, counterType: string) => {
+        const state = get();
+        const card = state.cards.find(c => c.id === cardId);
+        if (!card) return;
+
+        set((s) => ({
+            cards: s.cards.map((c) => {
+                if (c.id !== cardId) return c;
+                const existingCounter = c.counters.find(cnt => cnt.type === counterType);
+                if (existingCounter) {
+                    // Increment existing counter
+                    return {
+                        ...c,
+                        counters: c.counters.map(cnt =>
+                            cnt.type === counterType ? { ...cnt, count: cnt.count + 1 } : cnt
+                        ),
+                    };
+                } else {
+                    // Add new counter
+                    return {
+                        ...c,
+                        counters: [...c.counters, { type: counterType, count: 1 }],
+                    };
+                }
+            }),
+        }));
+
+        // Generate a label for logging
+        const counterLabels: Record<string, string> = {
+            plus1: '+1/+1',
+            minus1: '-1/-1',
+            loyalty: 'Loyalty',
+        };
+        const label = counterLabels[counterType] || counterType;
+        get().addLogEntry('other', `Added ${label} counter to "${card.card.name}"`);
+        if (state.isOnlineMode) get().broadcastPlayerState();
+    },
+
+    // Remove a counter from a card (decrements by 1, removes if reaches 0)
+    removeCardCounter: (cardId: string, counterType: string) => {
+        const state = get();
+        const card = state.cards.find(c => c.id === cardId);
+        if (!card) return;
+
+        const existingCounter = card.counters.find(cnt => cnt.type === counterType);
+        if (!existingCounter) return;
+
+        set((s) => ({
+            cards: s.cards.map((c) => {
+                if (c.id !== cardId) return c;
+                if (existingCounter.count <= 1) {
+                    // Remove counter entirely
+                    return {
+                        ...c,
+                        counters: c.counters.filter(cnt => cnt.type !== counterType),
+                    };
+                } else {
+                    // Decrement counter
+                    return {
+                        ...c,
+                        counters: c.counters.map(cnt =>
+                            cnt.type === counterType ? { ...cnt, count: cnt.count - 1 } : cnt
+                        ),
+                    };
+                }
+            }),
+        }));
+
+        const counterLabels: Record<string, string> = {
+            plus1: '+1/+1',
+            minus1: '-1/-1',
+            loyalty: 'Loyalty',
+        };
+        const label = counterLabels[counterType] || counterType;
+        get().addLogEntry('other', `Removed ${label} counter from "${card.card.name}"`);
+        if (state.isOnlineMode) get().broadcastPlayerState();
+    },
+
+    // Adjust a counter by a specific amount (positive or negative)
+    adjustCardCounter: (cardId: string, counterType: string, amount: number) => {
+        const state = get();
+        const card = state.cards.find(c => c.id === cardId);
+        if (!card) return;
+
+        set((s) => ({
+            cards: s.cards.map((c) => {
+                if (c.id !== cardId) return c;
+                const existingCounterIndex = c.counters.findIndex(cnt => cnt.type === counterType);
+                if (existingCounterIndex !== -1) {
+                    const newCount = c.counters[existingCounterIndex].count + amount;
+                    if (newCount <= 0) {
+                        // Remove counter
+                        return {
+                            ...c,
+                            counters: c.counters.filter(cnt => cnt.type !== counterType),
+                        };
+                    } else {
+                        // Update counter
+                        return {
+                            ...c,
+                            counters: c.counters.map(cnt =>
+                                cnt.type === counterType ? { ...cnt, count: newCount } : cnt
+                            ),
+                        };
+                    }
+                } else if (amount > 0) {
+                    // Add new counter if amount is positive
+                    return {
+                        ...c,
+                        counters: [...c.counters, { type: counterType, count: amount }],
+                    };
+                }
+                return c;
+            }),
+        }));
+
+        if (state.isOnlineMode) get().broadcastPlayerState();
+    },
+
     drawCard: () => {
         const { cards, isOnlineMode } = get();
         const libraryCards = cards.filter(c => c.zone === 'library');
@@ -862,9 +1018,25 @@ export const useGameStore = create<GameStore>((set, get) => ({
     millCards: (count) => { for (let i = 0; i < count; i++) get().millCard(); },
 
     toggleTopCardRevealed: () => {
-        set((state) => ({ isTopCardRevealed: !state.isTopCardRevealed }));
-        // Broadcast in online mode so other players can see revealed cards
-        if (get().isOnlineMode) get().broadcastPlayerState();
+        const { isOnlineMode, localPlayerId, players } = get();
+        const newValue = !get().isTopCardRevealed;
+
+        // Update proxy field
+        set({ isTopCardRevealed: newValue });
+
+        // In online mode, also update players[localPlayerId] so broadcastPlayerState sends correct value
+        if (isOnlineMode && localPlayerId && players[localPlayerId]) {
+            set((state) => ({
+                players: {
+                    ...state.players,
+                    [localPlayerId]: {
+                        ...state.players[localPlayerId],
+                        isTopCardRevealed: newValue,
+                    },
+                },
+            }));
+            get().broadcastPlayerState();
+        }
     },
 
     putTopCardToBottom: () => {
@@ -921,7 +1093,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             .map(c => ({
                 ...c,
                 isTapped: false,
-                counters: 0,
+                counters: [],
                 zone: c.id === commanderCardId ? 'commandZone' as const : 'library' as const,
                 attachedToId: null,
                 attachmentIds: [],
@@ -991,7 +1163,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             card,
             isTapped: false,
             zone: 'battlefield',
-            counters: 0,
+            counters: [],
             isToken: true,
             attachmentIds: [],
             attachedToId: null,
@@ -1033,14 +1205,28 @@ export const useGameStore = create<GameStore>((set, get) => ({
         if (get().isOnlineMode) get().broadcastPlayerState();
     },
 
-    adjustMana: (color, amount) => set((state) => ({
-        manaPool: {
-            ...state.manaPool,
-            [color]: Math.max(0, state.manaPool[color] + amount),
-        },
-    })),
+    adjustMana: (color, amount) => {
+        const { isOnlineMode, viewingPlayerId, localPlayerId } = get();
+        // Guard: In online mode, only allow modifying your own state
+        if (isOnlineMode && viewingPlayerId !== localPlayerId) return;
 
-    clearManaPool: () => set({ manaPool: { ...initialManaPool } }),
+        set((state) => ({
+            manaPool: {
+                ...state.manaPool,
+                [color]: Math.max(0, state.manaPool[color] + amount),
+            },
+        }));
+        if (isOnlineMode) get().broadcastPlayerState();
+    },
+
+    clearManaPool: () => {
+        const { isOnlineMode, viewingPlayerId, localPlayerId } = get();
+        // Guard: In online mode, only allow modifying your own state
+        if (isOnlineMode && viewingPlayerId !== localPlayerId) return;
+
+        set({ manaPool: { ...initialManaPool } });
+        if (isOnlineMode) get().broadcastPlayerState();
+    },
 
     undo: () => {
         const { historyPast, historyFuture } = get();
@@ -1617,22 +1803,29 @@ export const useGameStore = create<GameStore>((set, get) => ({
     /**
      * Broadcast the local player's current state to the room.
      * Called after any state-mutating action in online mode.
+     * IMPORTANT: Always sends LOCAL player's data, even if viewing another player.
      */
     broadcastPlayerState: () => {
-        const { roomChannel, localPlayerId, isOnlineMode, life, cards, counters, manaPool, cardPositions, commanderCardId, players, isTopCardRevealed } = get();
+        const { roomChannel, localPlayerId, isOnlineMode, viewingPlayerId, players, life, cards, counters, manaPool, cardPositions, commanderCardId, isTopCardRevealed } = get();
 
         if (!isOnlineMode || !roomChannel || !localPlayerId) return;
 
-        // Get full player state
+        // Determine source of data: use proxy fields if viewing self, or saved player state if viewing another
+        const isViewingSelf = viewingPlayerId === localPlayerId;
+        const localPlayer = players[localPlayerId];
+
+        // Build the player state to broadcast
         const playerState: Player = {
-            ...players[localPlayerId],
-            life,
-            cards,
-            counters,
-            manaPool,
-            cardPositions,
-            commanderCardId,
-            isTopCardRevealed,
+            ...localPlayer,
+            // Use proxy fields only if we're viewing our own board (they're up-to-date)
+            // Otherwise, use the saved state from players record
+            life: isViewingSelf ? life : localPlayer.life,
+            cards: isViewingSelf ? cards : localPlayer.cards,
+            counters: isViewingSelf ? counters : localPlayer.counters,
+            manaPool: isViewingSelf ? manaPool : localPlayer.manaPool,
+            cardPositions: isViewingSelf ? cardPositions : localPlayer.cardPositions,
+            commanderCardId: isViewingSelf ? commanderCardId : localPlayer.commanderCardId,
+            isTopCardRevealed: isViewingSelf ? isTopCardRevealed : (localPlayer.isTopCardRevealed ?? false),
         };
 
         roomChannel.send({

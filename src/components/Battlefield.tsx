@@ -28,7 +28,9 @@ export default function Battlefield({ onHoverCard }: BattlefieldProps) {
         targetingMode,
         completeTargeting,
         cancelTargeting,
-        autoArrangeBattlefield
+        autoArrangeBattlefield,
+        addCardCounter,
+        removeCardCounter
     } = useGameStore();
 
     // Online mode - check if viewing own board or spectating
@@ -295,9 +297,72 @@ export default function Battlefield({ onHoverCard }: BattlefieldProps) {
                                                 TOKEN
                                             </div>
                                         )}
-                                        {card.counters > 0 && (
-                                            <div className="absolute bottom-1 right-1 bg-amber-500 text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                                                {card.counters}
+                                        {/* Counter Badges */}
+                                        {card.counters.length > 0 && (
+                                            <div className="absolute bottom-1 right-1 flex flex-wrap-reverse gap-1 max-w-[90%] justify-end">
+                                                {card.counters.map((counter, counterIndex) => {
+                                                    // Determine display based on counter type
+                                                    let bgClass = 'bg-gray-500';
+                                                    let displayText = counter.count.toString();
+                                                    let shape = 'rounded-full';
+                                                    let tooltipText = '';
+
+                                                    if (counter.type === 'plus1') {
+                                                        bgClass = 'bg-gradient-to-br from-green-400 to-green-600';
+                                                        displayText = `+${counter.count}`;
+                                                        tooltipText = '+1/+1 Counter';
+                                                    } else if (counter.type === 'minus1') {
+                                                        bgClass = 'bg-gradient-to-br from-red-400 to-red-600';
+                                                        displayText = `-${counter.count}`;
+                                                        tooltipText = '-1/-1 Counter';
+                                                    } else if (counter.type === 'loyalty') {
+                                                        bgClass = 'bg-gradient-to-br from-purple-400 to-purple-600';
+                                                        shape = 'rounded-sm rotate-45';
+                                                        tooltipText = 'Loyalty Counter';
+                                                    } else {
+                                                        // Custom counter - show first 2 letters
+                                                        bgClass = 'bg-gradient-to-br from-gray-400 to-gray-600';
+                                                        shape = 'rounded';
+                                                        displayText = counter.type.slice(0, 2).toUpperCase();
+                                                        tooltipText = `${counter.type} (${counter.count})`;
+                                                    }
+
+                                                    return (
+                                                        <div
+                                                            key={`${counter.type}-${counterIndex}`}
+                                                            className={`
+                                                                ${bgClass} ${shape}
+                                                                ${counter.type === 'loyalty' ? 'w-6 h-6 p-0.5' : 'min-w-5 h-5 px-1'}
+                                                                flex items-center justify-center
+                                                                text-white text-[10px] font-bold
+                                                                shadow-lg cursor-pointer
+                                                                hover:scale-110 hover:shadow-xl
+                                                                transition-transform
+                                                                border border-white/30
+                                                            `}
+                                                            title={tooltipText || `${counter.type}: ${counter.count}`}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (!isOwnBoard) return;
+                                                                addCardCounter(card.id, counter.type);
+                                                                play('click');
+                                                            }}
+                                                            onContextMenu={(e) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                if (!isOwnBoard) return;
+                                                                removeCardCounter(card.id, counter.type);
+                                                                play('click');
+                                                            }}
+                                                        >
+                                                            {counter.type === 'loyalty' ? (
+                                                                <span className="-rotate-45 text-[9px]">{counter.count}</span>
+                                                            ) : (
+                                                                displayText
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         )}
                                     </div>

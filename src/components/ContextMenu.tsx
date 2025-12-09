@@ -18,6 +18,8 @@ import {
     Copy,
     Link,
     Unlink,
+    Plus,
+    CirclePlus,
 } from 'lucide-react';
 
 interface ContextMenuProps {
@@ -30,7 +32,7 @@ interface ContextMenuProps {
 
 export default function ContextMenu({ x, y, cardId, currentZone, onClose }: ContextMenuProps) {
     const menuRef = useRef<HTMLDivElement>(null);
-    const { moveCard, toggleTap, setInspectCard, commanderCardId, duplicateCard, startTargeting, detachCard, reorderCardInZone, toggleRevealCard } = useGameStore();
+    const { moveCard, toggleTap, setInspectCard, commanderCardId, duplicateCard, startTargeting, detachCard, reorderCardInZone, toggleRevealCard, addCardCounter } = useGameStore();
     const card = useGameStore((s) => s.cards.find((c) => c.id === cardId));
     const isOnlineMode = useGameStore((s) => s.isOnlineMode);
     const viewingPlayerId = useGameStore((s) => s.viewingPlayerId);
@@ -133,6 +135,50 @@ export default function ContextMenu({ x, y, cardId, currentZone, onClose }: Cont
             color: 'text-emerald-400',
             disabled: isViewingOtherPlayer,
         },
+        { type: 'divider', show: currentZone === 'battlefield' },
+        // Counter Actions Section Header
+        { type: 'section', label: 'Add Counter', show: currentZone === 'battlefield' },
+        // Quick Counter Actions
+        {
+            icon: <Plus className="w-4 h-4" />,
+            label: '+1/+1',
+            action: () => { addCardCounter(cardId, 'plus1'); play('click'); },
+            show: currentZone === 'battlefield',
+            color: 'text-green-400',
+            disabled: isViewingOtherPlayer,
+        },
+        {
+            icon: <Plus className="w-4 h-4" />,
+            label: '-1/-1',
+            action: () => { addCardCounter(cardId, 'minus1'); play('click'); },
+            show: currentZone === 'battlefield',
+            color: 'text-red-400',
+            disabled: isViewingOtherPlayer,
+        },
+        {
+            icon: <Plus className="w-4 h-4" />,
+            label: 'Loyalty',
+            action: () => { addCardCounter(cardId, 'loyalty'); play('click'); },
+            show: currentZone === 'battlefield',
+            color: 'text-purple-400',
+            disabled: isViewingOtherPlayer,
+        },
+        {
+            icon: <CirclePlus className="w-4 h-4" />,
+            label: 'Custom Counter...',
+            action: () => {
+                const counterName = window.prompt('Enter counter name (e.g., Charge, Stun, Time):');
+                if (counterName && counterName.trim()) {
+                    addCardCounter(cardId, counterName.trim().toLowerCase());
+                    play('click');
+                }
+            },
+            show: currentZone === 'battlefield',
+            color: 'text-gray-300',
+            disabled: isViewingOtherPlayer,
+            isAction: true, // Keep menu open after this action since it's a prompt
+        },
+        { type: 'divider', show: currentZone === 'battlefield' },
         // Attachment Actions
         {
             icon: <Link className="w-4 h-4" />,
@@ -277,6 +323,10 @@ export default function ContextMenu({ x, y, cardId, currentZone, onClose }: Cont
             {visibleItems.map((item, index) =>
                 item.type === 'divider' ? (
                     <div key={index} className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent my-1" />
+                ) : item.type === 'section' ? (
+                    <div key={index} className="px-3 py-1 text-xs font-semibold text-gray-500 bg-white/5">
+                        {item.label}
+                    </div>
                 ) : (
                     <button
                         key={index}

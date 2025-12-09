@@ -6,7 +6,7 @@ import { getCardImageUrl, getCardBackUrl } from '../api/scryfall';
 import { Zone, CardInstance } from '../types';
 import ContextMenu from './ContextMenu';
 import DeckStatsModal from './DeckStatsModal';
-import { Crown, BookOpen, Skull, Ban, Search, Shuffle, ArrowDown, Trash2, Eye, EyeOff, ArrowDownToLine, BarChart3 } from 'lucide-react';
+import { Crown, BookOpen, Skull, Ban, Search, Shuffle, ArrowDown, Trash2, Eye, EyeOff, ArrowDownToLine, BarChart3, Menu, ZoomIn } from 'lucide-react';
 
 interface ZoneBoxProps {
     zone: Zone;
@@ -46,9 +46,22 @@ export default function ZoneBox({ zone, label, icon }: ZoneBoxProps) {
     const moveCard = useGameStore((s) => s.moveCard);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cardId: string } | null>(null);
 
+    // Check if viewing another player in online mode
+    const isOnlineMode = useGameStore((s) => s.isOnlineMode);
+    const viewingPlayerId = useGameStore((s) => s.viewingPlayerId);
+    const localPlayerId = useGameStore((s) => s.localPlayerId);
+    const isViewingOtherPlayer = isOnlineMode && viewingPlayerId !== localPlayerId;
+
     const handleClick = () => {
         if (zone === 'library') {
-            setIsMenuOpen(!isMenuOpen);
+            // If top card is revealed, clicking on it opens the inspect view
+            // This allows ALL players to see the revealed card enlarged
+            if (isTopCardRevealed && topCard) {
+                setInspectCard(topCard.card, topCard.id);
+            } else if (!isViewingOtherPlayer) {
+                // Only open menu if not viewing another player
+                setIsMenuOpen(!isMenuOpen);
+            }
         } else if (zone === 'commandZone') {
             // Commander: single click = zoom/inspect
             if (topCard) {
@@ -57,6 +70,14 @@ export default function ZoneBox({ zone, label, icon }: ZoneBoxProps) {
         } else {
             // Graveyard/Exile: open modal
             setIsModalOpen(true);
+        }
+    };
+
+    // Separate handler for opening library menu (for when card is revealed)
+    const handleLibraryMenuClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!isViewingOtherPlayer) {
+            setIsMenuOpen(!isMenuOpen);
         }
     };
 
@@ -119,11 +140,29 @@ export default function ZoneBox({ zone, label, icon }: ZoneBoxProps) {
                         </div>
                     )}
 
-                    {/* Revealed indicator for library */}
+                    {/* Revealed indicator for library - click to zoom, menu button for options */}
                     {zone === 'library' && isTopCardRevealed && topCard && (
-                        <div className="absolute top-1 right-1 bg-cyan-500 rounded-full p-0.5 shadow-lg shadow-cyan-500/30">
-                            <Eye className="w-3 h-3 text-white" />
-                        </div>
+                        <>
+                            {/* Eye indicator showing card is revealed */}
+                            <div className="absolute top-1 right-1 bg-cyan-500 rounded-full p-0.5 shadow-lg shadow-cyan-500/30">
+                                <Eye className="w-3 h-3 text-white" />
+                            </div>
+                            {/* Zoom hint at bottom */}
+                            <div className="absolute bottom-1 left-1 right-1 flex items-center justify-center gap-1 bg-black/60 rounded py-0.5 text-[10px] text-cyan-300">
+                                <ZoomIn className="w-3 h-3" />
+                                <span>Click to inspect</span>
+                            </div>
+                            {/* Menu button for library actions (only for local player) */}
+                            {!isViewingOtherPlayer && (
+                                <button
+                                    onClick={handleLibraryMenuClick}
+                                    className="absolute top-1 left-1 bg-gray-800/80 hover:bg-gray-700 rounded p-1 shadow-lg transition-colors"
+                                    title="Open Library Menu"
+                                >
+                                    <Menu className="w-3 h-3 text-white" />
+                                </button>
+                            )}
+                        </>
                     )}
                 </button>
 

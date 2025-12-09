@@ -62,7 +62,14 @@ export default function TopNav({ onOpenSettings }: TopNavProps) {
         historyFuture,
         isOnlineMode,
         leaveRoom,
+        viewingPlayerId,
+        localPlayerId,
+        players,
     } = useGameStore();
+
+    // Check if we're viewing another player's board (read-only mode)
+    const isViewingOther = isOnlineMode && viewingPlayerId !== localPlayerId;
+    const viewingPlayerName = isViewingOther && viewingPlayerId ? players[viewingPlayerId]?.name : null;
 
     const { isMuted, toggleMute } = useSoundSettings();
     const { play } = useSoundEngine();
@@ -107,24 +114,35 @@ export default function TopNav({ onOpenSettings }: TopNavProps) {
                 </div>
 
                 {/* Life Counter - Premium */}
-                <div className="flex items-center gap-1 life-counter-premium px-3 py-1.5">
+                <div className={`flex items-center gap-1 life-counter-premium px-3 py-1.5 ${isViewingOther ? 'opacity-60' : ''}`}>
                     <Heart className="w-5 h-5 text-red-500 fill-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
-                    <button
-                        onClick={() => { adjustLife(-1); play('click'); }}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-500/20 text-red-400 font-bold transition-all"
-                    >
-                        −
-                    </button>
+                    {!isViewingOther && (
+                        <button
+                            onClick={() => { adjustLife(-1); play('click'); }}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-500/20 text-red-400 font-bold transition-all"
+                        >
+                            −
+                        </button>
+                    )}
                     <span className="text-2xl font-bold min-w-[2.5rem] text-center text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">
                         {life}
                     </span>
-                    <button
-                        onClick={() => { adjustLife(1); play('click'); }}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-green-500/20 text-green-400 font-bold transition-all"
-                    >
-                        +
-                    </button>
+                    {!isViewingOther && (
+                        <button
+                            onClick={() => { adjustLife(1); play('click'); }}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-green-500/20 text-green-400 font-bold transition-all"
+                        >
+                            +
+                        </button>
+                    )}
                 </div>
+
+                {/* Viewing Other Player Indicator */}
+                {isViewingOther && viewingPlayerName && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/20 border border-purple-500/40 rounded-lg">
+                        <span className="text-purple-300 text-sm font-medium">👁 Viewing: {viewingPlayerName}</span>
+                    </div>
+                )}
 
                 {/* Turn Counter - Premium */}
                 <div className="flex items-center gap-2 counter-premium px-3 py-1.5">
@@ -134,16 +152,21 @@ export default function TopNav({ onOpenSettings }: TopNavProps) {
                     </span>
                 </div>
 
-                {/* Next Turn Button - Premium */}
+                {/* Next Turn Button - Premium (disabled when viewing other player) */}
                 <button
                     onClick={nextTurn}
-                    className="relative group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all overflow-hidden"
+                    disabled={isViewingOther}
+                    className={`relative group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all overflow-hidden ${isViewingOther ? 'opacity-50 cursor-not-allowed' : ''}`}
                     style={{
-                        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(37, 99, 235, 0.9))',
-                        border: '1px solid rgba(59, 130, 246, 0.5)',
-                        boxShadow: '0 0 20px rgba(59, 130, 246, 0.2)'
+                        background: isViewingOther
+                            ? 'linear-gradient(135deg, rgba(100, 100, 100, 0.5), rgba(80, 80, 80, 0.6))'
+                            : 'linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(37, 99, 235, 0.9))',
+                        border: isViewingOther
+                            ? '1px solid rgba(100, 100, 100, 0.3)'
+                            : '1px solid rgba(59, 130, 246, 0.5)',
+                        boxShadow: isViewingOther ? 'none' : '0 0 20px rgba(59, 130, 246, 0.2)'
                     }}
-                    title="Next Turn: Untap all, Draw 1"
+                    title={isViewingOther ? 'Cannot pass turn while viewing another player' : 'Next Turn: Untap all, Draw 1'}
                 >
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity -translate-x-full group-hover:translate-x-full duration-500" />
                     <SkipForward className="w-4 h-4 relative z-10" />
@@ -170,19 +193,23 @@ export default function TopNav({ onOpenSettings }: TopNavProps) {
                                             <span className="text-sm">{COUNTER_CONFIG[key].label}</span>
                                         </div>
                                         <div className="flex items-center gap-1">
-                                            <button
-                                                onClick={() => adjustCounter(key, -1)}
-                                                className="w-6 h-6 flex items-center justify-center rounded bg-gray-700/50 hover:bg-gray-600 text-sm transition-colors"
-                                            >
-                                                −
-                                            </button>
+                                            {!isViewingOther && (
+                                                <button
+                                                    onClick={() => adjustCounter(key, -1)}
+                                                    className="w-6 h-6 flex items-center justify-center rounded bg-gray-700/50 hover:bg-gray-600 text-sm transition-colors"
+                                                >
+                                                    −
+                                                </button>
+                                            )}
                                             <span className="w-6 text-center font-bold text-sm text-amber-400">{counters[key]}</span>
-                                            <button
-                                                onClick={() => adjustCounter(key, 1)}
-                                                className="w-6 h-6 flex items-center justify-center rounded bg-gray-700/50 hover:bg-gray-600 text-sm transition-colors"
-                                            >
-                                                +
-                                            </button>
+                                            {!isViewingOther && (
+                                                <button
+                                                    onClick={() => adjustCounter(key, 1)}
+                                                    className="w-6 h-6 flex items-center justify-center rounded bg-gray-700/50 hover:bg-gray-600 text-sm transition-colors"
+                                                >
+                                                    +
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -191,18 +218,20 @@ export default function TopNav({ onOpenSettings }: TopNavProps) {
                     )}
                 </div>
 
-                {/* Randomizers Dropdown - Premium */}
-                <div className="relative" ref={randomRef}>
+                {/* Randomizers Dropdown - Premium (disabled when viewing other player) */}
+                <div className={`relative ${isViewingOther ? 'opacity-50' : ''}`} ref={randomRef}>
                     <button
-                        onClick={() => setIsRandomOpen(!isRandomOpen)}
-                        className="flex items-center gap-1 px-3 py-2 counter-premium hover:border-amber-500/30 transition-all"
+                        onClick={() => !isViewingOther && setIsRandomOpen(!isRandomOpen)}
+                        disabled={isViewingOther}
+                        className={`flex items-center gap-1 px-3 py-2 counter-premium hover:border-amber-500/30 transition-all ${isViewingOther ? 'cursor-not-allowed' : ''}`}
+                        title={isViewingOther ? 'Cannot use randomizers while viewing another player' : 'Randomizers'}
                     >
                         <Dices className="w-4 h-4" />
                         <span className="hidden sm:inline">Randomizers</span>
                         <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isRandomOpen ? 'rotate-180' : ''}`} />
                     </button>
 
-                    {isRandomOpen && (
+                    {isRandomOpen && !isViewingOther && (
                         <div className="absolute top-full mt-2 left-0 dropdown-premium py-2 min-w-[160px] z-50">
                             <button
                                 onClick={() => { flipCoin(); play('coin'); setIsRandomOpen(false); }}
