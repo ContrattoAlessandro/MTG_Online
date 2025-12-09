@@ -18,6 +18,12 @@ export default function ManaPoolWidget() {
     const manaPool = useGameStore((s) => s.manaPool);
     const adjustMana = useGameStore((s) => s.adjustMana);
     const clearManaPool = useGameStore((s) => s.clearManaPool);
+    const isOnlineMode = useGameStore((s) => s.isOnlineMode);
+    const viewingPlayerId = useGameStore((s) => s.viewingPlayerId);
+    const localPlayerId = useGameStore((s) => s.localPlayerId);
+
+    // Block interactions when viewing another player's board
+    const isViewingOtherPlayer = isOnlineMode && viewingPlayerId !== localPlayerId;
 
     const totalMana = Object.values(manaPool).reduce((sum, val) => sum + val, 0);
 
@@ -34,7 +40,10 @@ export default function ManaPoolWidget() {
             {/* Header */}
             <div className="flex items-center justify-between mb-2 px-1">
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Mana Pool</span>
-                {totalMana > 0 && (
+                {isViewingOtherPlayer && (
+                    <span className="text-[9px] text-amber-400" title="Viewing only">👁</span>
+                )}
+                {totalMana > 0 && !isViewingOtherPlayer && (
                     <button
                         onClick={clearManaPool}
                         className="p-1 hover:bg-gray-700 rounded transition-colors"
@@ -55,19 +64,20 @@ export default function ManaPoolWidget() {
                     return (
                         <motion.button
                             key={color}
-                            onClick={() => adjustMana(color, 1)}
+                            onClick={() => !isViewingOtherPlayer && adjustMana(color, 1)}
                             onContextMenu={(e) => {
                                 e.preventDefault();
-                                adjustMana(color, -1);
+                                if (!isViewingOtherPlayer) adjustMana(color, -1);
                             }}
+                            disabled={isViewingOtherPlayer}
                             className={`
                                 relative w-10 h-10 rounded-full
                                 bg-gradient-to-br ${bgColor}
                                 flex items-center justify-center
                                 transition-all duration-200
                                 hover:scale-110 active:scale-95
-                                select-none cursor-pointer
-                                ${isActive ? 'ring-2 ring-offset-2 ring-offset-gray-900' : 'opacity-60 hover:opacity-100'}
+                                select-none ${isViewingOtherPlayer ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}
+                                ${isActive && !isViewingOtherPlayer ? 'ring-2 ring-offset-2 ring-offset-gray-900' : 'opacity-60 hover:opacity-100'}
                             `}
                             style={{
                                 boxShadow: isActive

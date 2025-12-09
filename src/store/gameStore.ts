@@ -207,6 +207,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             commanderCardId: null,
             isDead: false,
             recentDamageTaken: 0,
+            isTopCardRevealed: false,
         },
         'player-2': {
             id: 'player-2',
@@ -220,6 +221,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             commanderCardId: null,
             isDead: false,
             recentDamageTaken: 0,
+            isTopCardRevealed: false,
         },
         'player-3': {
             id: 'player-3',
@@ -233,6 +235,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             commanderCardId: null,
             isDead: false,
             recentDamageTaken: 0,
+            isTopCardRevealed: false,
         },
         'player-4': {
             id: 'player-4',
@@ -246,6 +249,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             commanderCardId: null,
             isDead: false,
             recentDamageTaken: 0,
+            isTopCardRevealed: false,
         },
     },
     turnOrder: ['player-1', 'player-2', 'player-3', 'player-4'],
@@ -299,6 +303,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // Switch which player's board we're viewing (for multiplayer)
     // Saves current player state before switching, loads new player state
+    // NOTE: gamePhase and gameStarted are NOT changed - they represent the LOCAL player's state
     switchView: (playerId: string) => {
         const state = get();
         const currentPlayerId = state.viewingPlayerId;
@@ -306,19 +311,29 @@ export const useGameStore = create<GameStore>((set, get) => ({
         // Don't switch to the same player
         if (currentPlayerId === playerId) return;
 
-        // Save current player's state back to their player object
+        // In online mode, only save state if we're currently viewing our OWN board
+        // (We shouldn't overwrite remote player data that came from broadcasts)
+        // In offline mode, save any player's state
+        const shouldSaveCurrentPlayer = !state.isOnlineMode || currentPlayerId === state.localPlayerId;
+
         const updatedPlayers = { ...state.players };
-        updatedPlayers[currentPlayerId] = {
-            ...updatedPlayers[currentPlayerId],
-            life: state.life,
-            cards: state.cards,
-            counters: state.counters,
-            manaPool: state.manaPool,
-            cardPositions: state.cardPositions,
-            commanderCardId: state.commanderCardId,
-        };
+
+        if (shouldSaveCurrentPlayer) {
+            // Save current player's state back to their player object
+            updatedPlayers[currentPlayerId] = {
+                ...updatedPlayers[currentPlayerId],
+                life: state.life,
+                cards: state.cards,
+                counters: state.counters,
+                manaPool: state.manaPool,
+                cardPositions: state.cardPositions,
+                commanderCardId: state.commanderCardId,
+                isTopCardRevealed: state.isTopCardRevealed,
+            };
+        }
 
         // Load the new player's state into proxy fields
+        // We do NOT modify gamePhase or gameStarted - those are local player state
         const newPlayer = updatedPlayers[playerId];
         set({
             players: updatedPlayers,
@@ -329,9 +344,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
             manaPool: newPlayer.manaPool,
             cardPositions: newPlayer.cardPositions,
             commanderCardId: newPlayer.commanderCardId,
-            // Reset game phase for new player if they haven't started
-            gamePhase: newPlayer.cards.length === 0 ? 'SETUP' : state.gamePhase,
-            gameStarted: newPlayer.cards.length > 0,
+            isTopCardRevealed: newPlayer.isTopCardRevealed ?? false,
+            // NOTE: gamePhase and gameStarted are intentionally NOT changed here
+            // They represent the local player's game state, not the viewed player's
         });
     },
 
@@ -414,6 +429,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 lastRandomResult: null,
             });
 
+            // Broadcast loaded deck to other players in online mode
+            if (get().isOnlineMode) get().broadcastPlayerState();
+
             return { success: true, notFound: [...cmdNotFound, ...notFound] };
         } catch (error) {
             set({ error: error instanceof Error ? error.message : 'Failed to import deck', isLoading: false });
@@ -471,6 +489,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 gamePhase: 'MULLIGAN',
                 mulliganCount: 0,
             });
+
+            // Broadcast loaded deck to other players in online mode
+            if (get().isOnlineMode) get().broadcastPlayerState();
         } catch (error) {
             set({ error: error instanceof Error ? error.message : 'Failed to load deck', isLoading: false });
         }
@@ -785,7 +806,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     millCards: (count) => { for (let i = 0; i < count; i++) get().millCard(); },
 
-    toggleTopCardRevealed: () => set((state) => ({ isTopCardRevealed: !state.isTopCardRevealed })),
+    toggleTopCardRevealed: () => {
+        set((state) => ({ isTopCardRevealed: !state.isTopCardRevealed }));
+        // Broadcast in online mode so other players can see revealed cards
+        if (get().isOnlineMode) get().broadcastPlayerState();
+    },
 
     putTopCardToBottom: () => {
         const { cards } = get();
@@ -1639,6 +1664,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
                     event: 'player_join',
                     payload: ourPresence,
                 });
+
+                // Also re-broadcast our game state so the new player can see our cards
+                get().broadcastPlayerState();
             }
         }
     },

@@ -15,6 +15,11 @@ export const PlayerSwitcher: React.FC = () => {
         connectedPlayers
     } = useGameStore();
 
+    // Hide PlayerSwitcher in single player mode - no other players to interact with
+    if (!isOnlineMode) {
+        return null;
+    }
+
     return (
         <motion.div
             drag
