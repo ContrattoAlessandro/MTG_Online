@@ -695,30 +695,50 @@ export const useGameStore = create<GameStore>((set, get) => ({
     },
 
     tapCard: (cardId) => {
-        set((state) => ({
-            cards: state.cards.map((c) => c.id === cardId ? { ...c, isTapped: true } : c),
+        const state = get();
+        const card = state.cards.find(c => c.id === cardId);
+        if (!card) return;
+
+        set((s) => ({
+            cards: s.cards.map((c) => c.id === cardId ? { ...c, isTapped: true } : c),
         }));
-        if (get().isOnlineMode) get().broadcastPlayerState();
+
+        get().addLogEntry('tap', `Tapped "${card.card.name}"`);
+        if (state.isOnlineMode) get().broadcastPlayerState();
     },
 
     untapCard: (cardId) => {
-        set((state) => ({
-            cards: state.cards.map((c) => c.id === cardId ? { ...c, isTapped: false } : c),
+        const state = get();
+        const card = state.cards.find(c => c.id === cardId);
+        if (!card) return;
+
+        set((s) => ({
+            cards: s.cards.map((c) => c.id === cardId ? { ...c, isTapped: false } : c),
         }));
-        if (get().isOnlineMode) get().broadcastPlayerState();
+
+        get().addLogEntry('tap', `Untapped "${card.card.name}"`);
+        if (state.isOnlineMode) get().broadcastPlayerState();
     },
 
     toggleTap: (cardId) => {
-        set((state) => ({
-            cards: state.cards.map((c) => c.id === cardId ? { ...c, isTapped: !c.isTapped } : c),
+        const state = get();
+        const card = state.cards.find(c => c.id === cardId);
+        if (!card) return;
+
+        const newTappedState = !card.isTapped;
+        set((s) => ({
+            cards: s.cards.map((c) => c.id === cardId ? { ...c, isTapped: newTappedState } : c),
         }));
-        if (get().isOnlineMode) get().broadcastPlayerState();
+
+        get().addLogEntry('tap', `${newTappedState ? 'Tapped' : 'Untapped'} "${card.card.name}"`);
+        if (state.isOnlineMode) get().broadcastPlayerState();
     },
 
     untapAll: () => {
         set((state) => ({
             cards: state.cards.map((c) => c.zone === 'battlefield' ? { ...c, isTapped: false } : c),
         }));
+        get().addLogEntry('tap', `Untapped all permanents`);
         if (get().isOnlineMode) get().broadcastPlayerState();
     },
 
@@ -903,6 +923,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
             historyPast: [...state.historyPast.slice(-MAX_HISTORY + 1), snapshot],
             historyFuture: [],
         }));
+        get().addLogEntry('create', `Created token: ${card.name}`);
+        if (get().isOnlineMode) get().broadcastPlayerState();
     },
 
     duplicateCard: (cardId) => {
@@ -927,6 +949,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
             historyPast: [...s.historyPast.slice(-MAX_HISTORY + 1), snapshot],
             historyFuture: [],
         }));
+        get().addLogEntry('create', `Created duplicate of "${originalCard.card.name}"`);
+        if (get().isOnlineMode) get().broadcastPlayerState();
     },
 
     adjustMana: (color, amount) => set((state) => ({
@@ -974,19 +998,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         });
     },
 
-    addLogEntry: (actionType, message) => {
-        const { turn, gameLog } = get();
-        const entry: GameLogEntry = {
-            id: uuidv4(),
-            turn,
-            timestamp: Date.now(),
-            actionType,
-            message,
-        };
-        set({ gameLog: [...gameLog, entry].slice(-100) });
-    },
+    // clearGameLog duplicate removed
 
-    clearGameLog: () => set({ gameLog: [] }),
 
     applyScryChanges: (changes) => {
         const state = get();
@@ -1033,6 +1046,24 @@ export const useGameStore = create<GameStore>((set, get) => ({
             historyPast: [...state.historyPast.slice(-MAX_HISTORY + 1), snapshot],
             historyFuture: [],
         });
+
+        // Log Scry/Surveil/Organize results
+        const topCount = changes.newTopOrder.length;
+        const bottomCount = changes.toBottom.length;
+        const graveNames = changes.toGraveyard.map(id => cards.find(c => c.id === id)?.card.name).filter(Boolean);
+        const exileNames = changes.toExile.map(id => cards.find(c => c.id === id)?.card.name).filter(Boolean);
+
+        const parts = [];
+        if (topCount > 0) parts.push(`${topCount} top`);
+        if (bottomCount > 0) parts.push(`${bottomCount} bottom`);
+        if (graveNames.length > 0) parts.push(`Graveyard: ${graveNames.join(', ')}`);
+        if (exileNames.length > 0) parts.push(`Exile: ${exileNames.join(', ')}`);
+
+        if (parts.length > 0) {
+            get().addLogEntry('other', `Organize Result: ${parts.join(', ')}`);
+        }
+
+        if (get().isOnlineMode) get().broadcastPlayerState();
     },
 
     mulligan: () => {
@@ -1182,6 +1213,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         });
 
         get().addLogEntry('other', `Attached "${sourceCard.card.name}" to "${targetCard.card.name}"`);
+        if (get().isOnlineMode) get().broadcastPlayerState();
     },
 
     detachCard: (cardId) => {
@@ -1216,6 +1248,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         });
 
         get().addLogEntry('other', `Detached "${sourceCard.card.name}"`);
+        if (get().isOnlineMode) get().broadcastPlayerState();
     },
 
     startTargeting: (sourceCardId) => {
