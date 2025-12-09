@@ -9,6 +9,8 @@ import {
     Ban,
     ArrowUp,
     ArrowDown,
+    ArrowLeft,
+    ArrowRight,
     Crown,
     RotateCcw,
     Eye,
@@ -27,7 +29,7 @@ interface ContextMenuProps {
 
 export default function ContextMenu({ x, y, cardId, currentZone, onClose }: ContextMenuProps) {
     const menuRef = useRef<HTMLDivElement>(null);
-    const { moveCard, toggleTap, setInspectCard, commanderCardId, duplicateCard, startTargeting, detachCard } = useGameStore();
+    const { moveCard, toggleTap, setInspectCard, commanderCardId, duplicateCard, startTargeting, detachCard, reorderCardInZone } = useGameStore();
     const card = useGameStore((s) => s.cards.find((c) => c.id === cardId));
     const isOnlineMode = useGameStore((s) => s.isOnlineMode);
     const viewingPlayerId = useGameStore((s) => s.viewingPlayerId);
@@ -86,6 +88,23 @@ export default function ContextMenu({ x, y, cardId, currentZone, onClose }: Cont
             disabled: false, // Always enabled
         },
         { type: 'divider', show: true },
+        // Reorder options (for hand and battlefield)
+        {
+            icon: <ArrowLeft className="w-4 h-4" />,
+            label: 'Move Left',
+            action: () => { reorderCardInZone(cardId, 'left'); play('click'); },
+            show: currentZone === 'hand' || currentZone === 'battlefield',
+            color: 'text-indigo-400',
+            disabled: isViewingOtherPlayer,
+        },
+        {
+            icon: <ArrowRight className="w-4 h-4" />,
+            label: 'Move Right',
+            action: () => { reorderCardInZone(cardId, 'right'); play('click'); },
+            show: currentZone === 'hand' || currentZone === 'battlefield',
+            color: 'text-indigo-400',
+            disabled: isViewingOtherPlayer,
+        },
         // Tap/Untap
         {
             icon: <RotateCcw className="w-4 h-4" />,

@@ -95,6 +95,7 @@ interface GameStore extends GameState {
 
     // Card actions
     moveCard: (cardId: string, toZone: Zone, position?: 'top' | 'bottom') => void;
+    reorderCardInZone: (cardId: string, direction: 'left' | 'right') => void;
     tapCard: (cardId: string) => void;
     untapCard: (cardId: string) => void;
     toggleTap: (cardId: string) => void;
@@ -713,6 +714,40 @@ export const useGameStore = create<GameStore>((set, get) => ({
         }
 
         if (isOnlineMode) get().broadcastPlayerState();
+    },
+
+    // Reorder card within its zone (for manual arrangement)
+    reorderCardInZone: (cardId: string, direction: 'left' | 'right') => {
+        const state = get();
+        const { cards } = state;
+        const card = cards.find(c => c.id === cardId);
+
+        if (!card) return;
+
+        // Only allow reordering in hand and battlefield
+        if (card.zone !== 'hand' && card.zone !== 'battlefield') return;
+
+        // Get all cards in the same zone
+        const zoneCards = cards.filter(c => c.zone === card.zone);
+        const currentIndex = zoneCards.findIndex(c => c.id === cardId);
+
+        // Calculate new index
+        const newIndex = direction === 'left' ? currentIndex - 1 : currentIndex + 1;
+
+        // Check bounds
+        if (newIndex < 0 || newIndex >= zoneCards.length) return;
+
+        // Create a new array with swapped positions
+        const newZoneCards = [...zoneCards];
+        [newZoneCards[currentIndex], newZoneCards[newIndex]] = [newZoneCards[newIndex], newZoneCards[currentIndex]];
+
+        // Rebuild the full cards array preserving order of other zones
+        const otherCards = cards.filter(c => c.zone !== card.zone);
+        const newCards = [...otherCards, ...newZoneCards];
+
+        set({ cards: newCards });
+
+        if (state.isOnlineMode) get().broadcastPlayerState();
     },
 
     tapCard: (cardId) => {
